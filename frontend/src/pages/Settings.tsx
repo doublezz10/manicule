@@ -168,7 +168,7 @@ export function SettingsPage() {
         <h2 style={{ marginTop: 0 }}>About</h2>
         <div className="setting-row">
           <label>manicule ☞<span className="hint">Free open-source software, MIT licensed. No accounts, no telemetry.</span></label>
-          <a href="https://ko-fi.com/manicule" target="_blank" rel="noreferrer"><button>Ko-fi ☕</button></a>
+          <a href="https://ko-fi.com/doublezz10" target="_blank" rel="noreferrer"><button>Ko-fi ☕</button></a>
         </div>
         <div className="setting-row">
           <label>Updates<span className="hint">Checks GitHub releases once, on click</span></label>

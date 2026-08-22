@@ -2,6 +2,8 @@
 
 ☞ **manicule** — the pointing hand from manuscript margins. "Look here."
 
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/doublezz10)
+
 One window for your e-reader's whole pipeline: search legal book catalogs → one-click download →
 auto-cleaned local library → built-in OPDS server your CrossPoint / Xteink X3 reader browses and
 pulls from over WiFi.

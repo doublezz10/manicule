@@ -46,5 +46,6 @@ come later if wanted.
 
 ## 2026-08-21 — Ko-fi
 
-`FUNDING.yml` points at `ko-fi: manicule`; About panel links the same page.
-Update once the final Ko-fi username is confirmed.
+Funding lives at https://ko-fi.com/doublezz10 — surfaced in exactly two places
+per the locked funding decision: the GitHub sponsor button via `FUNDING.yml`
+(README badge) and the About panel in Settings. Nowhere else in-product.
