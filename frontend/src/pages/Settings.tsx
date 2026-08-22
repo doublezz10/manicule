@@ -155,12 +155,20 @@ export function SettingsPage() {
             </div>
           </>
         ) : (
-          TIER2_IDS.map((id) => (
-            <div className="setting-row" key={id}>
-              <label>{TIER2_NAMES[id]}<span className="hint">Tier 2 · adapter lands in M2 — toggle reserved</span></label>
-              <Toggle on={false} onChange={() => toastCtx.push("info", `${TIER2_NAMES[id]} support ships in milestone M2`)} />
-            </div>
-          ))
+          <>
+            <ZLibCredentials
+              creds={s.source_credentials?.["z-library"] ?? {}}
+              enabled={!!s.sources_enabled["z-library"]}
+              onSave={(creds) => save({ sources_enabled: { "z-library": true }, source_credentials: { "z-library": creds } })}
+              onToggle={(v) => save({ sources_enabled: { "z-library": v } })}
+            />
+            {(["annas-archive", "libgen"] as const).map((id) => (
+              <div className="setting-row" key={id}>
+                <label>{TIER2_NAMES[id]}<span className="hint">Tier 2 · adapter ships in a later milestone</span></label>
+                <Toggle on={false} onChange={() => toastCtx.push("info", `${TIER2_NAMES[id]} support ships in a later milestone`)} />
+              </div>
+            ))}
+          </>
         )}
       </div>
 
@@ -201,6 +209,73 @@ function SEEmail(props: { onSave: (email: string) => void }) {
       <button className="small primary" disabled={!email.trim()} onClick={() => props.onSave(email.trim())}>
         Save
       </button>
+    </div>
+  );
+}
+
+function ZLibCredentials(props: {
+  creds: Record<string, string>;
+  enabled: boolean;
+  onSave: (creds: Record<string, string>) => void;
+  onToggle: (v: boolean) => void;
+}) {
+  const [email, setEmail] = useState(props.creds.email ?? "");
+  const [password, setPassword] = useState(props.creds.password ?? "");
+  const [baseUrl, setBaseUrl] = useState(props.creds.base_url ?? "");
+  const [dirty, setDirty] = useState(false);
+
+  const hasCreds = !!(email.trim() && password.trim() && baseUrl.trim());
+
+  const handleSave = () => {
+    if (!hasCreds) return;
+    props.onSave({ email: email.trim(), password: password.trim(), base_url: baseUrl.trim() });
+    setDirty(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+      <div className="setting-row">
+        <label>Z-Library<span className="hint">eAPI login · user-supplied mirror · Tier 2</span></label>
+        <Toggle on={props.enabled} onChange={props.onToggle} />
+      </div>
+      {props.enabled && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 0 }}>
+          <input
+            type="text"
+            placeholder="mirror URL (e.g. https://singlelogin.re)"
+            value={baseUrl}
+            onChange={(e) => { setBaseUrl(e.target.value); setDirty(true); }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="text"
+              placeholder="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setDirty(true); }}
+              style={{ flex: 1 }}
+            />
+            <input
+              type="password"
+              placeholder="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setDirty(true); }}
+              style={{ flex: 1 }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              className="small primary"
+              disabled={!hasCreds}
+              onClick={handleSave}
+            >
+              {dirty ? "Save credentials" : "Saved"}
+            </button>
+            {props.creds.email && (
+              <span className="pill ok">configured</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

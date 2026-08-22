@@ -42,3 +42,63 @@ func TestPreferFormat(t *testing.T) {
 		t.Fatalf("expected EPUB preferred, got %+v", pick)
 	}
 }
+
+func TestZLibraryNeedsAuth(t *testing.T) {
+	z := NewZLibrary(nil).(*zlibrary)
+	if !z.NeedsAuth() {
+		t.Fatal("expected NeedsAuth true with no credentials")
+	}
+	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass"})
+	if z.NeedsAuth() {
+		t.Fatal("expected NeedsAuth false after setting credentials")
+	}
+}
+
+func TestZLibrarySessionInvalidation(t *testing.T) {
+	z := NewZLibrary(nil).(*zlibrary)
+	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass"})
+	z.mu.Lock()
+	z.session = "old-session"
+	z.mu.Unlock()
+
+	// Changing credentials should clear session
+	z.SetCredentials(Credentials{"email": "new@b.com", "password": "pass2"})
+	z.mu.Lock()
+	s := z.session
+	z.mu.Unlock()
+	if s != "" {
+		t.Fatalf("session not cleared after credential change: %q", s)
+	}
+}
+
+func TestZLibraryBaseURLSessionInvalidation(t *testing.T) {
+	z := NewZLibrary(nil).(*zlibrary)
+	z.SetBaseURL("https://mirror1.com")
+	z.mu.Lock()
+	z.session = "session1"
+	z.mu.Unlock()
+
+	// Changing mirror should clear session
+	z.SetBaseURL("https://mirror2.com")
+	z.mu.Lock()
+	s := z.session
+	z.mu.Unlock()
+	if s != "" {
+		t.Fatalf("session not cleared after mirror change: %q", s)
+	}
+}
+
+func TestZLibraryResolveCover(t *testing.T) {
+	z := NewZLibrary(nil).(*zlibrary)
+	z.SetBaseURL("https://z-lib.gs")
+
+	if got := z.resolveCover(""); got != "" {
+		t.Fatalf("empty cover should return empty, got %q", got)
+	}
+	if got := z.resolveCover("https://other.com/c.jpg"); got != "https://other.com/c.jpg" {
+		t.Fatalf("absolute cover should pass through, got %q", got)
+	}
+	if got := z.resolveCover("/covers/123.jpg"); got != "https://z-lib.gs/covers/123.jpg" {
+		t.Fatalf("relative cover should resolve, got %q", got)
+	}
+}

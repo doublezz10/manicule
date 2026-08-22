@@ -43,8 +43,9 @@
     "z-library": {
       "name": "Z-Library",
       "tier": 2,
-      "description": "eAPI login flow with SSO session survival across mirrors. Opt-in only with user credentials.",
-      "endpoints": []
+      "description": "eAPI login flow with SSO session survival across mirrors. User supplies email, password, and mirror base URL. Opt-in only with disclaimer acknowledgment.",
+      "endpoints": [],
+      "auth_model": "email-password-eapi"
     },
     "libgen": {
       "name": "Library Genesis",
