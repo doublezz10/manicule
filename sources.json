@@ -28,7 +28,7 @@
     "openlibrary": {
       "name": "Open Library",
       "tier": 1,
-      "description": "Metadata + covers layer (M1). Search API is anonymous.",
+      "description": "Metadata and covers layer. Search returns rich descriptions, subjects, and cover art. No direct acquisition — download from other sources. Cover enrichment auto-fills missing covers on import.",
       "endpoints": [
         { "url": "https://openlibrary.org", "kind": "api" },
         { "url": "https://covers.openlibrary.org", "kind": "images" }

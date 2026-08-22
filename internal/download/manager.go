@@ -56,6 +56,8 @@ type Manager struct {
 	imageWidth int
 	notify     Notifier
 
+	// coverEnricher fetches covers from OL when the EPUB has none.
+	coverEnricher func(ctx context.Context, title string, authors []string) ([]byte, string, error)
 	// resolveSource looks up an adapter by ID (wired by the app layer).
 	resolveSource func(id string) (sources.Source, bool)
 	// probeHook re-probes a source's fleet endpoints after a failure.
@@ -82,6 +84,11 @@ func (m *Manager) SetCleaning(on bool, imageWidth int) {
 	defer m.mu.Unlock()
 	m.cleanOn = on
 	m.imageWidth = imageWidth
+}
+
+// SetCoverEnricher wires the OL cover enrichment hook into the ingest pipeline.
+func (m *Manager) SetCoverEnricher(fn func(ctx context.Context, title string, authors []string) ([]byte, string, error)) {
+	m.coverEnricher = fn
 }
 
 // Enqueue adds a result+format to the queue and starts a worker.
@@ -153,6 +160,7 @@ func (m *Manager) run(t *Task) {
 		Store:         m.store,
 		CleanOnImport: m.cleanOn,
 		ImageMaxWidth: m.imageWidth,
+		CoverEnricher: m.coverEnricher,
 	}
 	book, err := ing.ImportFile(ctx, tmp, meta)
 	if err != nil {

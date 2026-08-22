@@ -135,6 +135,10 @@ export function SettingsPage() {
             />
           </div>
         ))}
+        <div className="setting-row">
+          <label>Open Library<span className="hint">Metadata + covers · enriches search results and auto-fills missing covers · Tier 1</span></label>
+          <Toggle on={!!s.sources_enabled["openlibrary"]} onChange={(v) => save({ sources_enabled: { openlibrary: v } })} />
+        </div>
 
         {!showMoreSources ? (
           <div className="setting-row">

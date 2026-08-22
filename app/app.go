@@ -61,6 +61,7 @@ type Manicule struct {
 	settings  *config.Settings
 	fleet     *fleet.Fleet
 	registry  *sources.Registry
+	coverEnricher func(ctx context.Context, title string, authors []string) ([]byte, string, error)
 	store     *library.Store
 	downloads *download.Manager
 	opdsSrv   *opds.Server
@@ -100,6 +101,14 @@ func (m *Manicule) ServiceStartup(ctx context.Context, _ application.ServiceOpti
 
 	m.registry = sources.NewRegistry(sources.NewHTTPClient())
 	m.syncSources()
+
+	// Wire OL cover enrichment for the ingest pipeline.
+	if olSrc, ok := m.registry.Get("openlibrary"); ok {
+		m.coverEnricher = func(ctx context.Context, title string, authors []string) ([]byte, string, error) {
+			return sources.EnrichCover(ctx, sources.NewHTTPClient(), title, authors)
+		}
+		_ = olSrc // ensure the import is used
+	}
 
 	if s.LibraryPath != "" {
 		if err := m.openLibrary(); err != nil {

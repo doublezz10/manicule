@@ -22,15 +22,17 @@ func NewRegistry(client *http.Client) *Registry {
 	}
 	g := NewGutendex(client)
 	se := NewStandardEbooks(client)
+	ol := NewOpenLibrary(client)
 	zl := NewZLibrary(client)
 	r := &Registry{
 		client: client,
 		sources: map[string]Source{
 			g.ID():  g,
 			se.ID(): se,
+			ol.ID(): ol,
 			zl.ID(): zl,
 		},
-		order: []string{"gutendex", "standardebooks", "z-library"},
+		order: []string{"gutendex", "standardebooks", "openlibrary", "z-library"},
 	}
 	return r
 }

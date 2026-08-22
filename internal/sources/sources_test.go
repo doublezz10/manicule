@@ -1,6 +1,9 @@
 package sources
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCanonicalAuthorName(t *testing.T) {
 	cases := map[string]string{
@@ -100,5 +103,29 @@ func TestZLibraryResolveCover(t *testing.T) {
 	}
 	if got := z.resolveCover("/covers/123.jpg"); got != "https://z-lib.gs/covers/123.jpg" {
 		t.Fatalf("relative cover should resolve, got %q", got)
+	}
+}
+
+func TestOpenLibraryMetadata(t *testing.T) {
+	ol := NewOpenLibrary(nil)
+	if ol.ID() != "openlibrary" {
+		t.Fatalf("ID = %q", ol.ID())
+	}
+	if ol.Tier() != 1 {
+		t.Fatalf("Tier = %d, want 1", ol.Tier())
+	}
+	if ol.NeedsAuth() {
+		t.Fatal("OL should not need auth")
+	}
+}
+
+func TestOpenLibraryDownloadUnsupported(t *testing.T) {
+	ol := NewOpenLibrary(nil)
+	err := ol.Download(nil, Format{}, nil)
+	if err == nil {
+		t.Fatal("expected error for unsupported download")
+	}
+	if !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

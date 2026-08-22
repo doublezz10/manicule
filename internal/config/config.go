@@ -50,6 +50,9 @@ func (s *Settings) applyDefaults() {
 	if _, ok := s.SourcesEnabled["gutendex"]; !ok {
 		s.SourcesEnabled["gutendex"] = true // Tier 1 default-on
 	}
+	if _, ok := s.SourcesEnabled["openlibrary"]; !ok {
+		s.SourcesEnabled["openlibrary"] = true // Tier 1 default-on
+	}
 	if s.ImageMaxWidth <= 0 {
 		s.ImageMaxWidth = 1440
 	}

@@ -21,6 +21,12 @@ type Ingestor struct {
 	CleanOnImport     bool
 	ImageMaxWidth     int
 	DeleteSourceAfter bool // watch-folder toggle; manual imports never delete
+
+	// CoverEnricher is an optional hook called when a book has no cover after
+	// EPUB extraction. Receives title + authors, returns image bytes and
+	// extension (e.g. ".jpg"), or nil when no cover is available. Wired to
+	// Open Library's EnrichCover by the app layer.
+	CoverEnricher func(ctx context.Context, title string, authors []string) ([]byte, string, error)
 }
 
 // ImportFile copies srcPath into the library and registers it. meta supplies
@@ -113,6 +119,17 @@ func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) 
 	}
 
 	in.extractAndAttachCover(book)
+
+	// If EPUB had no cover, try OL enrichment (when wired).
+	if book.Book.CoverPath == "" && in.CoverEnricher != nil {
+		if imgData, ext, err := in.CoverEnricher(ctx, book.Book.Title, book.Book.Authors); err == nil && len(imgData) > 0 {
+			coverRel := filepath.Join(".manicule", "covers", fmt.Sprintf("%d%s", book.Book.ID, ext))
+			if err := os.WriteFile(in.Store.AbsPath(coverRel), imgData, 0o644); err == nil {
+				_ = in.Store.UpdateCover(book.Book.ID, coverRel)
+				book.Book.CoverPath = coverRel
+			}
+		}
+	}
 
 	// Cleaning pass writes Book.clean.epub alongside the untouched master.
 	if in.CleanOnImport && format == "EPUB" {

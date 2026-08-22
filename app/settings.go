@@ -94,7 +94,7 @@ func (m *Manicule) ImportFiles() error {
 	if err != nil || len(files) == 0 {
 		return err
 	}
-	ing := &library.Ingestor{Store: m.store, CleanOnImport: m.settings.CleanOnImport, ImageMaxWidth: m.settings.ImageMaxWidth}
+	ing := &library.Ingestor{Store: m.store, CleanOnImport: m.settings.CleanOnImport, ImageMaxWidth: m.settings.ImageMaxWidth, CoverEnricher: m.coverEnricher}
 	go func() {
 		imported := 0
 		for _, f := range files {
@@ -290,6 +290,7 @@ func (m *Manicule) startWatch() {
 		CleanOnImport:     m.settings.CleanOnImport,
 		ImageMaxWidth:     m.settings.ImageMaxWidth,
 		DeleteSourceAfter: m.settings.DeleteSourceAfterImport,
+		CoverEnricher:     m.coverEnricher,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.watchCancel = cancel
