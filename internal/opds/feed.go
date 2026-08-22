@@ -128,7 +128,7 @@ func acquisitionFeed(base, title string, books []library.BookWithFiles, page, to
 			if !f.IsOriginal {
 				label = " (e-ink cleaned)"
 			}
-			fmt.Fprintf(&b, `    <link rel="http://opds-spec.org/acquisition" type="%s" title="%s%s" href="%s/%d/%d"/>`+"\n",
+			fmt.Fprintf(&b, `    <link rel="http://opds-spec.org/acquisition" type="%s" title="%s%s" href="%s/%d"/>`+"\n",
 				mt, esc(strings.ToUpper(f.Format)), esc(label), selfHref, f.ID)
 		}
 		b.WriteString("  </entry>\n")

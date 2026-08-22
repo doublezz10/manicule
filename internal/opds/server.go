@@ -123,7 +123,9 @@ func (s *Server) logMW(next http.Handler) http.Handler {
 func (s *Server) authMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authOn, pin := s.Auth()
-		if !authOn {
+		if !authOn || strings.HasPrefix(r.URL.Path, "/cover/") {
+			// Covers stay public: they're thumbnails of free/public-domain
+			// books and must render inside the app's own webview.
 			next.ServeHTTP(w, r)
 			return
 		}

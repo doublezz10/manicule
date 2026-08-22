@@ -37,15 +37,20 @@ no telemetry, no paid anything.
 
 ## Development
 
-Requirements: Go 1.27+, Node 22+, Wails v3 CLI.
+Requirements: Go 1.27+, Node 22+, [Wails v3 CLI](https://v3.wails.io/).
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-wails3 doctor        # check platform dependencies
-wails3 task dev      # run with live reload
-wails3 task build    # produce build/bin/*
-go test ./...        # backend tests
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+
+wails3 task bindings   # regenerate TS bindings after changing app service methods
+wails3 task dev        # run with live frontend reload
+wails3 task build      # build/bin/manicule
+wails3 task test       # go test ./... && go vet ./...
 ```
+
+Architecture notes and build-time findings live in
+[docs/DECISIONS.md](./docs/DECISIONS.md). The endpoint registry is
+[sources.json](./sources.json) (embedded snapshot refreshed via `wails3 task snapshot`).
 
 ## Positioning
 

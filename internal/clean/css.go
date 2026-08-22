@@ -66,52 +66,51 @@ func removeFontFaces(css string, rep *Report) string {
 }
 
 func stripBannedDeclarations(css string, rep *Report) string {
+	return rewriteBraces(css, rep)
+}
+
+// rewriteBraces walks every {...} group (recursing into nested at-rule
+// bodies like @media) and strips banned declarations from each rule body.
+func rewriteBraces(s string, rep *Report) string {
 	var b strings.Builder
-	for _, block := range splitRules(css) {
-		b.WriteString(cleanRuleText(block, rep))
+	for {
+		open := strings.IndexByte(s, '{')
+		if open < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		depth := 0
+		j := open
+		for j < len(s) {
+			switch s[j] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+			if depth == 0 {
+				break
+			}
+			j++
+		}
+		if j >= len(s) { // unbalanced: bail out verbatim
+			b.WriteString(s)
+			return b.String()
+		}
+		inner := s[open+1 : j]
+		b.WriteString(s[:open])
+		b.WriteByte('{')
+		if strings.ContainsRune(inner, '{') {
+			b.WriteString(rewriteBraces(inner, rep)) // nested at-rules
+		} else {
+			b.WriteString(cleanBody(inner, rep))
+		}
+		b.WriteByte('}')
+		s = s[j+1:]
 	}
-	return b.String()
 }
 
-// splitRules walks CSS text preserving at-rules and selector blocks verbatim
-// except for declaration-level surgery inside their bodies.
-func splitRules(css string) []string {
-	var parts []string
-	depth := 0
-	start := 0
-	inComment := false
-	for i := 0; i < len(css); i++ {
-		if inComment {
-			if i >= 1 && css[i-1] == '*' && css[i] == '/' {
-				inComment = false
-			}
-			continue
-		}
-		switch css[i] {
-		case '/':
-			if i+1 < len(css) && css[i+1] == '*' {
-				inComment = true
-				i++
-			}
-		case '{', '}':
-			parts = append(parts, css[start:i+1])
-			start = i + 1
-			depth++
-		}
-	}
-	if start < len(css) {
-		parts = append(parts, css[start:])
-	}
-	return parts
-}
-
-func cleanRuleText(block string, rep *Report) string {
-	open := strings.IndexByte(block, '{')
-	close := strings.LastIndexByte(block, '}')
-	if open < 0 || close < open {
-		return block // selector fragment or at-rule header — keep
-	}
-	head, body, tail := block[:open+1], block[open+1:close], block[close:]
+func cleanBody(body string, rep *Report) string {
 	var kept []string
 	for _, decl := range strings.Split(body, ";") {
 		d := strings.TrimSpace(decl)
@@ -124,7 +123,7 @@ func cleanRuleText(block string, rep *Report) string {
 		}
 		kept = append(kept, d)
 	}
-	return head + strings.Join(kept, ";\n  ") + tail
+	return strings.Join(kept, ";\n  ")
 }
 
 func isBannedDeclaration(d string) bool {

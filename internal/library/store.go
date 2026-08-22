@@ -236,8 +236,8 @@ func (s *Store) Newest(offset, limit int) ([]BookWithFiles, error) {
 }
 
 func (s *Store) Authors() ([]string, error) {
-	rows, err := s.db.Query(`SELECT DISTINCT json_extract(value, '$') AS author
-		FROM books, json_each(books.authors_json) ORDER BY author COLLATE NOCASE`)
+	rows, err := s.db.Query(`SELECT DISTINCT je.value AS author
+		FROM books, json_each(books.authors_json) je ORDER BY author COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,8 @@ func (s *Store) UpdateCover(bookID int64, relPath string) error {
 
 // --- plumbing ------------------------------------------------------------
 
-const bookCols = `id, title, sort_title, authors_json, language, description, cover_path, source_id, source_book_id, dedupe_key, added_at`
+const bookCols = `books.id, books.title, books.sort_title, books.authors_json, books.language, books.description,
+	books.cover_path, books.source_id, books.source_book_id, books.dedupe_key, books.added_at`
 
 func (s *Store) scanBook(row *sql.Row) (*Book, error) {
 	var b Book

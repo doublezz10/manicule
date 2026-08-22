@@ -187,15 +187,16 @@ func Clean(srcPath, destPath string, opts Options) (*Report, error) {
 
 	// Pass 2: rewrite text members with rename/drop maps applied.
 	for _, t := range texts {
+		docDir := filepath.ToSlash(filepath.Dir(t.name))
 		var rewritten []byte
 		switch {
 		case t.isCSS:
 			cleaned, _ := CleanCSS(rewriteRefs(string(t.data), renames))
 			rewritten = []byte(cleaned + "\n" + BaseCSS)
 		case t.isMeta:
-			rewritten = rewriteXMLRefs(t.data, renames, dropped, rep)
+			rewritten = rewriteXMLRefs(t.data, renames, dropped, rep, docDir)
 		default:
-			rewritten = rewriteXHTML(t.data, renames, rep)
+			rewritten = rewriteXHTML(t.data, renames, rep, docDir)
 		}
 		if err := out.addDeflated(t.name, rewritten); err != nil {
 			return nil, err
@@ -250,7 +251,7 @@ const urlPrefix = "url("
 
 // rewriteXMLRefs walks OPF/NCX XML: rewrites href/src through the rename map
 // and deletes manifest items whose target was dropped (fonts).
-func rewriteXMLRefs(data []byte, renames map[string]string, dropped map[string]bool, rep *Report) []byte {
+func rewriteXMLRefs(data []byte, renames map[string]string, dropped map[string]bool, rep *Report, docDir string) []byte {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	dec.Strict = false
 	var buf bytes.Buffer
@@ -283,11 +284,19 @@ func rewriteXMLRefs(data []byte, renames map[string]string, dropped map[string]b
 			for i := range attrs {
 				key := attrs[i].Name.Local
 				if key == "href" || key == "src" || key == "source" {
-					target := normalizeRel(attrs[i].Value)
-					if repl, ok := renames[target]; ok {
-						attrs[i].Value = repl
+					if _, repl, hit := resolveAgainst(attrs[i].Value, docDir, renames); hit {
+						attrs[i].Value = relativize(repl, docDir)
+						continue
 					}
-					if dropped[target] && t.Name.Local == "item" {
+					target := normalizeRel(attrs[i].Value)
+					isDropped := false
+					if _, ok := dropped[target]; ok {
+						isDropped = true
+					} else if docDir != "" && docDir != "." {
+						_, ok2 := dropped[docDir+"/"+target]
+						isDropped = ok2
+					}
+					if isDropped && t.Name.Local == "item" {
 						skip = &skipState{name: t.Name.Local, val: target}
 						depth--
 						continue
@@ -357,9 +366,38 @@ func xmlEscape(s string) string {
 
 func normalizeRel(v string) string { return strings.TrimPrefix(v, "./") }
 
+// resolveAgainst finds ref in m either as-is or relative to docDir,
+// returning the matched key and its mapped value.
+func resolveAgainst(ref, docDir string, m map[string]string) (string, string, bool) {
+	ref = normalizeRel(ref)
+	if ref == "" {
+		return "", "", false
+	}
+	if v, ok := m[ref]; ok {
+		return ref, v, true
+	}
+	if docDir != "" && docDir != "." {
+		joined := docDir + "/" + ref
+		if v, ok := m[joined]; ok {
+			return joined, v, true
+		}
+	}
+	return "", "", false
+}
+
+// relativize strips docDir prefix from a resolved full member name so the
+// rewritten reference stays relative to the document, like the original.
+func relativize(full, docDir string) string {
+	prefix := docDir + "/"
+	if docDir != "" && docDir != "." && strings.HasPrefix(full, prefix) {
+		return strings.TrimPrefix(full, prefix)
+	}
+	return full
+}
+
 // rewriteXHTML parses HTML tolerantly, applies renames to src/href, strips
 // banned inline styles, cleans <style> blocks, drops svg nodes, and renders.
-func rewriteXHTML(data []byte, renames map[string]string, rep *Report) []byte {
+func rewriteXHTML(data []byte, renames map[string]string, rep *Report, docDir string) []byte {
 	doc, err := html.Parse(bytes.NewReader(data))
 	if err != nil || doc == nil {
 		// Fallback: plain-text reference rewrite keeps links working.
@@ -404,8 +442,8 @@ func rewriteXHTML(data []byte, renames map[string]string, rep *Report) []byte {
 						rep.RulesRemoved += r.RulesRemoved
 					}
 				case "src", "href":
-					if repl, ok := renames[normalizeRel(a.Val)]; ok {
-						a.Val = repl
+					if _, repl, hit := resolveAgainst(a.Val, docDir, renames); hit {
+						a.Val = relativize(repl, docDir)
 					}
 				}
 			}
