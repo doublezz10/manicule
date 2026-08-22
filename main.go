@@ -36,7 +36,9 @@ func main() {
 		},
 	})
 
-	window := appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
+	var window application.Window
+	if appInstance.Window != nil {
+	window = appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "manicule ☞",
 		Width:     1280,
 		Height:    820,
@@ -48,10 +50,17 @@ func main() {
 		},
 	})
 	app.SetMainWindowGetter(func() application.Window { return window })
+	}
 
-	tray := appInstance.SystemTray.New()
-	tray.SetMenu(manicule.TrayMenu())
-	manicule.AttachTray(tray)
+	// Skip tray in server mode (no native window manager).
+	if appInstance.Window != nil && appInstance.SystemTray != nil {
+		if tray := appInstance.SystemTray.New(); tray != nil {
+			if menu := manicule.TrayMenu(); menu != nil {
+				tray.SetMenu(menu)
+				manicule.AttachTray(tray)
+			}
+		}
+	}
 
 	if err := appInstance.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)

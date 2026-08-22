@@ -211,6 +211,8 @@ func (m *Manicule) refreshTray() {
 
 // TrayMenu builds the tray's context menu (called once from main).
 func (m *Manicule) TrayMenu() *application.Menu {
+	// In server mode (no native window), menu API may be uninitialized.
+	defer func() { recover() }()
 	menu := application.NewMenu()
 	menu.Add("Open manicule").OnClick(func(*application.Context) {
 		if w := mainWindow(); w != nil {
@@ -229,7 +231,7 @@ func (m *Manicule) TrayMenu() *application.Menu {
 	})
 	menu.AddSeparator()
 	menu.Add("Quit").OnClick(func(*application.Context) {
-		application.Get().Quit()
+		if a := application.Get(); a != nil { a.Quit() }
 	})
 	return menu
 }
