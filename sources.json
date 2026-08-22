@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "updated": "2026-08-21",
+  "sources": {
+    "gutendex": {
+      "name": "Project Gutenberg",
+      "tier": 1,
+      "description": "~75k public-domain titles via the Gutendex JSON API. Downloads go directly to gutenberg.org file servers.",
+      "endpoints": [
+        { "url": "https://gutendex.com", "kind": "api" }
+      ],
+      "download_hosts": [
+        "https://www.gutenberg.org",
+        "https://aleph.gutenberg.org"
+      ],
+      "geo_block_notes": "gutenberg.org geo-blocks Germany; aleph mirror is the fallback candidate."
+    },
+    "standardebooks": {
+      "name": "Standard Ebooks",
+      "tier": 1,
+      "description": "~1k meticulously formatted public-domain titles over OPDS 1.2. NOTE (verified 2026-08-21): the full OPDS feed is now a Patrons Circle benefit; access = patron email + blank password. The New Releases RSS/Atom feed remains anonymous.",
+      "endpoints": [
+        { "url": "https://standardebooks.org", "kind": "opds" }
+      ],
+      "feed_path": "/feeds/opds",
+      "auth_model": "email-blank-password"
+    },
+    "openlibrary": {
+      "name": "Open Library",
+      "tier": 1,
+      "description": "Metadata + covers layer (M1). Search API is anonymous.",
+      "endpoints": [
+        { "url": "https://openlibrary.org", "kind": "api" },
+        { "url": "https://covers.openlibrary.org", "kind": "images" }
+      ]
+    },
+    "annas-archive": {
+      "name": "Anna's Archive",
+      "tier": 2,
+      "description": "Donator-key API preferred; scrape fallback. Opt-in only with user credentials.",
+      "endpoints": []
+    },
+    "z-library": {
+      "name": "Z-Library",
+      "tier": 2,
+      "description": "eAPI login flow with SSO session survival across mirrors. Opt-in only with user credentials.",
+      "endpoints": []
+    },
+    "libgen": {
+      "name": "Library Genesis",
+      "tier": 2,
+      "description": "Mirror scraping. Opt-in only.",
+      "endpoints": []
+    }
+  }
+}
