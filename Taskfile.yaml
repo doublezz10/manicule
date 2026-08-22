@@ -1,0 +1,34 @@
+# Build & dev tasks (wails3 CLI wraps Task).
+
+version: '3'
+
+tasks:
+  build:
+    desc: Build the frontend and produce the desktop binary
+    cmds:
+      - wails3 generate bindings -d frontend/bindings -clean -ts -names
+      - cd frontend && npm install --no-audit --no-fund && npm run build
+      - go build -o build/bin/manicule .
+
+  dev:
+    desc: Run with live frontend reload
+    cmds:
+      - wails3 generate bindings -d frontend/bindings -clean -ts -names
+      - cd frontend && npm install --no-audit --no-fund
+      - wails3 task --verbose dev
+
+  test:
+    desc: Backend tests + vet
+    cmds:
+      - go test ./...
+      - go vet ./...
+
+  bindings:
+    desc: Regenerate TypeScript bindings after changing app service methods
+    cmds:
+      - wails3 generate bindings -d frontend/bindings -clean -ts -names
+
+  snapshot:
+    desc: Refresh the fleet's embedded registry snapshot from sources.json
+    cmds:
+      - cp sources.json internal/fleet/snapshot.json
