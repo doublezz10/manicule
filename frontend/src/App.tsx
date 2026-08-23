@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { backend, onEvent, type QueueTask } from "./lib/api";
 import { Sidebar } from "./components/Sidebar";
 import { Wizard } from "./components/Wizard";
+import { ManiculeMark } from "./components/icons";
 import { SearchPage } from "./pages/Search";
 import { QueuePage } from "./pages/Queue";
 import { LibraryPage } from "./pages/Library";
@@ -62,7 +63,12 @@ export default function App() {
   }, [page]);
 
   if (wizardDone === null) {
-    return <div className="empty"><div className="big">☞</div>loading…</div>;
+    return (
+      <div className="loading-screen">
+        <ManiculeMark size={56} />
+        <div>opening the study…</div>
+      </div>
+    );
   }
 
   if (!wizardDone) {
@@ -80,12 +86,14 @@ export default function App() {
     <ToastContext.Provider value={{ push }}>
       <div className="layout">
         <Sidebar page={page} setPage={setPage} queueCount={queueCount} serverLine={serverLine} />
-        <div className="main">
-          {page === "search" && <SearchPage />}
-          {page === "queue" && <QueuePage />}
-          {page === "library" && <LibraryPage />}
-          {page === "devices" && <DevicesPage />}
-          {page === "settings" && <SettingsPage />}
+        <div className="main" key={page}>
+          <div className="page-enter">
+            {page === "search" && <SearchPage />}
+            {page === "queue" && <QueuePage />}
+            {page === "library" && <LibraryPage />}
+            {page === "devices" && <DevicesPage />}
+            {page === "settings" && <SettingsPage />}
+          </div>
         </div>
       </div>
       <div className="toasts">

@@ -1,5 +1,6 @@
 import React from "react";
 import type { Page } from "../App";
+import { ManiculeMark, SearchIcon, QueueIcon, LibraryIcon, DevicesIcon, SettingsIcon } from "./icons";
 
 export function Sidebar(props: {
   page: Page;
@@ -7,23 +8,28 @@ export function Sidebar(props: {
   queueCount: number;
   serverLine: string;
 }) {
-  const items: { id: Page; label: string; icon: string }[] = [
-    { id: "search", label: "Search", icon: "🔍" },
-    { id: "queue", label: "Queue", icon: "⇣" },
-    { id: "library", label: "Library", icon: "📚" },
-    { id: "devices", label: "Devices", icon: "📡" },
-    { id: "settings", label: "Settings", icon: "⚙" },
+  const items: { id: Page; label: string; icon: React.ReactNode }[] = [
+    { id: "search", label: "Search", icon: <SearchIcon /> },
+    { id: "queue", label: "Queue", icon: <QueueIcon /> },
+    { id: "library", label: "Library", icon: <LibraryIcon /> },
+    { id: "devices", label: "Devices", icon: <DevicesIcon /> },
+    { id: "settings", label: "Settings", icon: <SettingsIcon /> },
   ];
+  const live = !!props.serverLine;
   return (
     <div className="sidebar">
-      <div className="logo"><span className="hand">☞</span> manicule</div>
+      <div className="logo">
+        <ManiculeMark size={34} />
+        <span className="word">manicule</span>
+      </div>
       {items.map((it) => (
         <div
           key={it.id}
           className={`nav-item ${props.page === it.id ? "active" : ""}`}
           onClick={() => props.setPage(it.id)}
         >
-          <span>{it.icon}</span>
+          <ManiculeMark size={22} className="nav-pointer" />
+          {it.icon}
           {it.label}
           {it.id === "queue" && props.queueCount > 0 && (
             <span className="badge">{props.queueCount}</span>
@@ -31,15 +37,12 @@ export function Sidebar(props: {
         </div>
       ))}
       <div className="sidebar-footer">
-        {props.serverLine ? (
-          <>
-            <div className="opds-pill">● OPDS live</div>
-            <div style={{ wordBreak: "break-all" }}>{props.serverLine}</div>
-          </>
-        ) : (
-          <div>OPDS off</div>
-        )}
-        <div style={{ marginTop: 8 }}>MIT · free forever</div>
+        <div className={`lamp ${live ? "" : "off"}`}>
+          <span className="flame">●</span>
+          {live ? "OPDS live" : "OPDS off"}
+        </div>
+        {live && <div className="server-url">{props.serverLine.replace("OPDS live at ", "")}</div>}
+        <div style={{ marginTop: 8 }}>MIT · no accounts · no telemetry</div>
       </div>
     </div>
   );

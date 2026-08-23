@@ -175,6 +175,7 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 	if q == "" {
 		return nil
 	}
+	fmt.Fprintf(os.Stderr, "DEBUG: SearchAll called with query=%q\n", q)
 	var wg sync.WaitGroup
 	groups := make([]SearchGroup, 0)
 	var mu sync.Mutex
@@ -198,11 +199,12 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 		wg.Add(1)
 		go func(src sources.Source, idx int) {
 			defer wg.Done()
-			ctx, cancel := context.WithTimeout(m.ctx, 20*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			res, err := src.Search(ctx, q, 24)
 			mu.Lock()
 			defer mu.Unlock()
+			slog.Info("search result", "source", src.ID(), "results", len(res), "err", err)
 			if err != nil {
 				if errors.Is(err, sources.ErrNeedsAuth) {
 					groups[idx].State = "needs-auth"
@@ -318,6 +320,12 @@ func (m *Manicule) openLibrary() error {
 	m.downloads.SetFilingMode(m.settings.FilingMode)
 	m.downloads.SetCoverEnricher(m.coverEnricher)
 	m.startWatch()
+	// Start the OPDS server if enabled.
+	if m.settings.ServerEnabled {
+		if err := m.restartServer(); err != nil {
+			slog.Warn("opds server failed to start", "err", err)
+		}
+	}
 	return nil
 }
 
