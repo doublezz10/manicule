@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { backend, type SettingsShape } from "../lib/api";
+import { ManiculeMark } from "./icons";
 
 export function Wizard(props: { onDone: () => void }) {
   const [step, setStep] = useState(0);
@@ -26,7 +27,7 @@ export function Wizard(props: { onDone: () => void }) {
   return (
     <div className="wizard">
       <div className="wizard-card">
-        <h1><span style={{ color: "var(--accent)" }}>☞</span> Welcome to manicule</h1>
+        <h1><ManiculeMark size={40} /> Welcome to manicule</h1>
         <div className="wizard-steps">
           {[0, 1, 2].map((i) => (
             <div key={i} className={`wizard-step-dot ${step >= i ? "active" : ""}`} />

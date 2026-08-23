@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { backend, type SearchResult } from "../lib/api";
 import { useToast } from "../App";
+import { ManiculeMark } from "../components/icons";
 
 function Cover(props: { src?: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   if (!props.src || failed) {
-    return <div className="cover-img" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 30 }}>☞</div>;
+    return <div className="cover-fallback"><ManiculeMark size={30} /></div>;
   }
   return (
     <img
@@ -64,11 +65,12 @@ export function SearchPage() {
 
   return (
     <>
+      <div className="eyebrow">catalogs <span className="dot">·</span> public first</div>
       <h1>Search</h1>
       <div className="search-bar">
         <input
           type="text"
-          placeholder="Title, author… (your library is searched on the Library page)"
+          placeholder="Title, author…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
@@ -81,10 +83,10 @@ export function SearchPage() {
 
       {groups === null && (
         <div className="empty">
-          <div className="big">☞</div>
-          Search legal catalogs — Project Gutenberg is live out of the box.<br />
-          Results are grouped by source; what you download lands in your library,
-          cleaned for e-ink.
+          <div className="big"><ManiculeMark size={46} /></div>
+          <div className="empty-title">Point at something worth reading.</div>
+          Project Gutenberg is live out of the box. Results are grouped by source,
+          and what you download lands in your library, cleaned for e-ink.
         </div>
       )}
 

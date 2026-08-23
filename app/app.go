@@ -175,7 +175,6 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 	if q == "" {
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: SearchAll called with query=%q\n", q)
 	var wg sync.WaitGroup
 	groups := make([]SearchGroup, 0)
 	var mu sync.Mutex
@@ -204,7 +203,6 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 			res, err := src.Search(ctx, q, 24)
 			mu.Lock()
 			defer mu.Unlock()
-			slog.Info("search result", "source", src.ID(), "results", len(res), "err", err)
 			if err != nil {
 				if errors.Is(err, sources.ErrNeedsAuth) {
 					groups[idx].State = "needs-auth"
