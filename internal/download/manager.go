@@ -54,6 +54,7 @@ type Manager struct {
 	store      *library.Store
 	cleanOn    bool
 	imageWidth int
+	filingMode string
 	notify     Notifier
 
 	// coverEnricher fetches covers from OL when the EPUB has none.
@@ -89,6 +90,13 @@ func (m *Manager) SetCleaning(on bool, imageWidth int) {
 // SetCoverEnricher wires the OL cover enrichment hook into the ingest pipeline.
 func (m *Manager) SetCoverEnricher(fn func(ctx context.Context, title string, authors []string) ([]byte, string, error)) {
 	m.coverEnricher = fn
+}
+
+// SetFilingMode updates the disk filing mode for new imports.
+func (m *Manager) SetFilingMode(mode string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.filingMode = mode
 }
 
 // Enqueue adds a result+format to the queue and starts a worker.
@@ -153,6 +161,8 @@ func (m *Manager) run(t *Task) {
 		Authors:      t.Authors,
 		Description:  t.result.Description,
 		Language:     t.result.Language,
+		Year:         library.ParseYear(t.result.Year),
+		Subjects:     t.result.Subjects,
 		SourceID:     t.result.SourceID,
 		SourceBookID: t.result.ID,
 	}
@@ -160,6 +170,7 @@ func (m *Manager) run(t *Task) {
 		Store:         m.store,
 		CleanOnImport: m.cleanOn,
 		ImageMaxWidth: m.imageWidth,
+		FilingMode:    m.filingMode,
 		CoverEnricher: m.coverEnricher,
 	}
 	book, err := ing.ImportFile(ctx, tmp, meta)

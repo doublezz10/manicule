@@ -56,6 +56,7 @@ export class Result {
     "authors": string[];
     "language"?: string;
     "description"?: string;
+    "subjects"?: string[];
     "cover_url"?: string;
     "year"?: string;
     "formats": Format[];
@@ -89,13 +90,17 @@ export class Result {
      */
     static createFrom($$source: any = {}): Result {
         const $$createField4_0 = $$createType0;
-        const $$createField9_0 = $$createType2;
+        const $$createField7_0 = $$createType0;
+        const $$createField10_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("authors" in $$parsedSource) {
             $$parsedSource["authors"] = $$createField4_0($$parsedSource["authors"]);
         }
+        if ("subjects" in $$parsedSource) {
+            $$parsedSource["subjects"] = $$createField7_0($$parsedSource["subjects"]);
+        }
         if ("formats" in $$parsedSource) {
-            $$parsedSource["formats"] = $$createField9_0($$parsedSource["formats"]);
+            $$parsedSource["formats"] = $$createField10_0($$parsedSource["formats"]);
         }
         return new Result($$parsedSource as Partial<Result>);
     }

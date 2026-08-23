@@ -24,6 +24,20 @@ func (m *Manicule) ListLibrary(query, sort string, page int) ([]library.BookWith
 	return m.store.List(query, sort, page*20, 50)
 }
 
+func (m *Manicule) ListByGenre(genre, sort string, page int) ([]library.BookWithFiles, error) {
+	if m.store == nil {
+		return nil, nil
+	}
+	return m.store.ListByGenre(genre, sort, page*20, 50)
+}
+
+func (m *Manicule) Genres() ([]string, error) {
+	if m.store == nil {
+		return nil, nil
+	}
+	return m.store.Genres()
+}
+
 func (m *Manicule) GetBook(id int64) (*library.BookWithFiles, error) {
 	if m.store == nil {
 		return nil, fmt.Errorf("no library")
@@ -94,7 +108,7 @@ func (m *Manicule) ImportFiles() error {
 	if err != nil || len(files) == 0 {
 		return err
 	}
-	ing := &library.Ingestor{Store: m.store, CleanOnImport: m.settings.CleanOnImport, ImageMaxWidth: m.settings.ImageMaxWidth, CoverEnricher: m.coverEnricher}
+	ing := &library.Ingestor{Store: m.store, CleanOnImport: m.settings.CleanOnImport, ImageMaxWidth: m.settings.ImageMaxWidth, FilingMode: m.settings.FilingMode, CoverEnricher: m.coverEnricher}
 	go func() {
 		imported := 0
 		for _, f := range files {
@@ -151,6 +165,7 @@ type SaveSettingsRequest struct {
 	LaunchAtLogin       *bool                        `json:"launch_at_login,omitempty"`
 	FleetOverrideSource *string                      `json:"fleet_override_source,omitempty"`
 	FleetOverrideURL    *string                      `json:"fleet_override_url,omitempty"`
+	FilingMode          *string                      `json:"filing_mode,omitempty"`
 }
 
 // SaveSettings applies a partial update and persists it. Heavyweight side
@@ -227,6 +242,12 @@ func (m *Manicule) SaveSettings(req SaveSettingsRequest) (*config.Settings, erro
 		s.FleetOverrides[sanitizeSourceID(*req.FleetOverrideSource)] = strings.TrimSpace(*req.FleetOverrideURL)
 		m.fleet.SetOverride(*req.FleetOverrideSource, strings.TrimSpace(*req.FleetOverrideURL))
 	}
+	if req.FilingMode != nil && *req.FilingMode != "" {
+		s.FilingMode = *req.FilingMode
+		if m.downloads != nil {
+			m.downloads.SetFilingMode(s.FilingMode)
+		}
+	}
 
 	if err := m.cfg.Save(s); err != nil {
 		return nil, err
@@ -290,6 +311,7 @@ func (m *Manicule) startWatch() {
 		CleanOnImport:     m.settings.CleanOnImport,
 		ImageMaxWidth:     m.settings.ImageMaxWidth,
 		DeleteSourceAfter: m.settings.DeleteSourceAfterImport,
+		FilingMode:        m.settings.FilingMode,
 		CoverEnricher:     m.coverEnricher,
 	}
 	ctx, cancel := context.WithCancel(context.Background())

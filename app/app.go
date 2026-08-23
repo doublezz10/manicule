@@ -315,6 +315,8 @@ func (m *Manicule) openLibrary() error {
 		m.resolveSource,
 		m.probeSource,
 	)
+	m.downloads.SetFilingMode(m.settings.FilingMode)
+	m.downloads.SetCoverEnricher(m.coverEnricher)
 	m.startWatch()
 	return nil
 }

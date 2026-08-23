@@ -89,6 +89,17 @@ export function SettingsPage() {
             <Toggle on={s.delete_source_after_import} onChange={(v) => save({ delete_source_after_import: v })} />
           </div>
         )}
+        <div className="setting-row">
+          <label>Filing mode<span className="hint">How books are organized in the library folder</span></label>
+          <select
+            value={s.filing_mode || "author-title"}
+            onChange={(e) => save({ filing_mode: e.target.value })}
+          >
+            <option value="author-title">Author / Title</option>
+            <option value="genre-author-title">Genre / Author / Title</option>
+            <option value="decade-author-title">Decade / Author / Title</option>
+          </select>
+        </div>
       </div>
 
       <div className="settings-section">

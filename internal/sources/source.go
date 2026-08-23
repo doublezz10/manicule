@@ -31,6 +31,7 @@ type Result struct {
 	Authors     []string `json:"authors"`
 	Language    string   `json:"language,omitempty"`
 	Description string   `json:"description,omitempty"`
+	Subjects    []string `json:"subjects,omitempty"`
 	CoverURL    string   `json:"cover_url,omitempty"`
 	Year        string   `json:"year,omitempty"`
 	Formats     []Format `json:"formats"`

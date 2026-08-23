@@ -79,6 +79,7 @@ export interface SaveSettingsRequest {
   launch_at_login?: boolean;
   fleet_override_source?: string;
   fleet_override_url?: string;
+  filing_mode?: string;
 }
 
 export const backend = {
@@ -91,6 +92,9 @@ export const backend = {
   clearFinishedQueue: () => api.ClearFinishedQueue(),
   listLibrary: (query: string, sort: string, page: number) =>
     api.ListLibrary(query, sort, page) as Promise<any>,
+  listByGenre: (genre: string, sort: string, page: number) =>
+    api.ListByGenre(genre, sort, page) as Promise<any>,
+  genres: () => api.Genres() as Promise<string[]>,
   getBook: (id: number) => api.GetBook(id) as Promise<any>,
   countBooks: () => api.CountBooks() as Promise<number>,
   deleteBook: (id: number) => api.DeleteBook(id),
@@ -125,6 +129,7 @@ export interface SettingsShape {
   auth_enabled: boolean;
   pin: string;
   launch_at_login: boolean;
+  filing_mode: string;
   wizard_done: boolean;
 }
 

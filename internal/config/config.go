@@ -40,6 +40,8 @@ type Settings struct {
 
 	FleetOverrides map[string]string `json:"fleet_overrides,omitempty"` // sourceID → manual endpoint base URL
 
+	FilingMode string `json:"filing_mode,omitempty"` // "author-title" (default), "genre-author-title", "decade-author-title"
+
 	WizardDone bool `json:"wizard_done"`
 }
 
@@ -52,6 +54,9 @@ func (s *Settings) applyDefaults() {
 	}
 	if _, ok := s.SourcesEnabled["openlibrary"]; !ok {
 		s.SourcesEnabled["openlibrary"] = true // Tier 1 default-on
+	}
+	if s.FilingMode == "" {
+		s.FilingMode = "author-title"
 	}
 	if s.ImageMaxWidth <= 0 {
 		s.ImageMaxWidth = 1440

@@ -12,10 +12,13 @@ export class Book {
     "authors": string[];
     "language"?: string;
     "description"?: string;
+    "year"?: number;
+    "subjects"?: string[];
 
     /**
-     * relative to library root
+     * "1810s", "1920s", or ""
      */
+    "decade"?: string;
     "cover_path"?: string;
     "source_id"?: string;
     "source_book_id"?: string;
@@ -47,9 +50,13 @@ export class Book {
      */
     static createFrom($$source: any = {}): Book {
         const $$createField3_0 = $$createType0;
+        const $$createField7_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("authors" in $$parsedSource) {
             $$parsedSource["authors"] = $$createField3_0($$parsedSource["authors"]);
+        }
+        if ("subjects" in $$parsedSource) {
+            $$parsedSource["subjects"] = $$createField7_0($$parsedSource["subjects"]);
         }
         return new Book($$parsedSource as Partial<Book>);
     }

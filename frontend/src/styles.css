@@ -148,6 +148,7 @@ input:focus { border-color: var(--accent); }
 }
 .cover-title { font-size: 13px; font-weight: 550; line-height: 1.25; }
 .cover-author { font-size: 12px; color: var(--text-dim); }
+.cover-meta { display: flex; gap: 4px; flex-wrap: wrap; }
 .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* queue */

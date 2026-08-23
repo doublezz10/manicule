@@ -106,14 +106,12 @@ func (o *openlibrary) Search(ctx context.Context, query string, limit int) ([]Re
 			ID:         d.Key,
 			Title:      d.Title,
 			Authors:    d.AuthorName,
+			Subjects:   d.Subject,
 			CoverURL:   olCoverURL(d.CoverI),
 			Language:   firstStr(d.Language),
 		}
 		if d.FirstPublishYear > 0 {
 			r.Year = strconv.Itoa(d.FirstPublishYear)
-		}
-		if len(d.Subject) > 0 {
-			r.Description = strings.Join(subjectPreview(d.Subject), ", ")
 		}
 		// OL is metadata-only in v1 — no download formats.
 		// The cover + description enrichment is the primary value.

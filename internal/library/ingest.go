@@ -21,6 +21,7 @@ type Ingestor struct {
 	CleanOnImport     bool
 	ImageMaxWidth     int
 	DeleteSourceAfter bool // watch-folder toggle; manual imports never delete
+	FilingMode        string // "author-title" (default), "genre-author-title", "decade-author-title"
 
 	// CoverEnricher is an optional hook called when a book has no cover after
 	// EPUB extraction. Receives title + authors, returns image bytes and
@@ -58,10 +59,20 @@ func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) 
 	if meta == nil {
 		meta = &Book{}
 	}
-	if meta.Title == "" || len(meta.Authors) == 0 {
-		if t, a := epubMeta(srcPath); t != "" {
-			meta.Title = t
-			meta.Authors = a
+	if meta.Title == "" || len(meta.Authors) == 0 || meta.Year == 0 {
+		if t, a, y, s := epubMeta(srcPath); t != "" {
+			if meta.Title == "" {
+				meta.Title = t
+			}
+			if len(meta.Authors) == 0 {
+				meta.Authors = a
+			}
+			if meta.Year == 0 && y > 0 {
+				meta.Year = y
+			}
+			if len(meta.Subjects) == 0 && len(s) > 0 {
+				meta.Subjects = s
+			}
 		}
 	}
 	if meta.Title == "" {
@@ -72,7 +83,7 @@ func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) 
 		meta.Authors = []string{"Unknown"}
 	}
 
-	relDir := filepath.Join(sanitizeFS(meta.FirstAuthor()), sanitizeFS(meta.Title))
+	relDir := computeFilingDir(in.FilingMode, meta)
 	absDir := filepath.Join(in.Store.Root(), relDir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		return nil, err
@@ -189,6 +200,30 @@ func (in *Ingestor) extractAndAttachCover(book *BookWithFiles) {
 // --- helpers ---------------------------------------------------------------
 
 var badFSSep = func(r rune) bool { return r == '/' || r == '\\' }
+
+// computeFilingDir builds the directory path based on the active filing mode.
+func computeFilingDir(mode string, meta *Book) string {
+	author := sanitizeFS(meta.FirstAuthor())
+	title := sanitizeFS(meta.Title)
+	switch mode {
+	case "genre-author-title":
+		genre := "Uncategorized"
+		if len(meta.Subjects) > 0 {
+			genre = sanitizeFS(meta.Subjects[0])
+		}
+		return filepath.Join(genre, author, title)
+	case "decade-author-title":
+		decade := "Unknown"
+		if meta.Decade != "" {
+			decade = sanitizeFS(meta.Decade)
+		} else if meta.Year > 0 {
+			decade = ComputeDecade(meta.Year)
+		}
+		return filepath.Join(decade, author, title)
+	default: // "author-title"
+		return filepath.Join(author, title)
+	}
+}
 
 func sanitizeFS(name string) string {
 	name = strings.Map(func(r rune) rune {

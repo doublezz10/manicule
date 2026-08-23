@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,9 @@ CREATE TABLE IF NOT EXISTS books (
 	authors_json   TEXT NOT NULL DEFAULT '[]',
 	language       TEXT NOT NULL DEFAULT '',
 	description    TEXT NOT NULL DEFAULT '',
+	year           INTEGER NOT NULL DEFAULT 0,
+	subjects_json  TEXT NOT NULL DEFAULT '[]',
+	decade         TEXT NOT NULL DEFAULT '',
 	cover_path     TEXT NOT NULL DEFAULT '',
 	source_id      TEXT NOT NULL DEFAULT '',
 	source_book_id TEXT NOT NULL DEFAULT '',
@@ -62,23 +66,23 @@ CREATE TABLE IF NOT EXISTS book_files (
 CREATE INDEX IF NOT EXISTS idx_book_files_book ON book_files(book_id);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(
-	title, authors, description,
+	title, authors, description, subjects,
 	content='books', content_rowid='id'
 );
 
 CREATE TRIGGER IF NOT EXISTS books_ai AFTER INSERT ON books BEGIN
-	INSERT INTO books_fts(rowid, title, authors, description)
-	VALUES (new.id, new.title, new.authors_json, new.description);
+	INSERT INTO books_fts(rowid, title, authors, description, subjects)
+	VALUES (new.id, new.title, new.authors_json, new.description, new.subjects_json);
 END;
 CREATE TRIGGER IF NOT EXISTS books_ad AFTER DELETE ON books BEGIN
-	INSERT INTO books_fts(books_fts, rowid, title, authors, description)
-	VALUES ('delete', old.id, old.title, old.authors_json, old.description);
+	INSERT INTO books_fts(books_fts, rowid, title, authors, description, subjects)
+	VALUES ('delete', old.id, old.title, old.authors_json, old.description, old.subjects_json);
 END;
-CREATE TRIGGER IF NOT EXISTS books_au AFTER UPDATE OF title, authors_json, description ON books BEGIN
-	INSERT INTO books_fts(books_fts, rowid, title, authors, description)
-	VALUES ('delete', old.id, old.title, old.authors_json, old.description);
-	INSERT INTO books_fts(rowid, title, authors, description)
-	VALUES (new.id, new.title, new.authors_json, new.description);
+CREATE TRIGGER IF NOT EXISTS books_au AFTER UPDATE OF title, authors_json, description, subjects_json ON books BEGIN
+	INSERT INTO books_fts(books_fts, rowid, title, authors, description, subjects)
+	VALUES ('delete', old.id, old.title, old.authors_json, old.description, old.subjects_json);
+	INSERT INTO books_fts(rowid, title, authors, description, subjects)
+	VALUES (new.id, new.title, new.authors_json, new.description, new.subjects_json);
 END;
 `
 
@@ -99,6 +103,14 @@ func Open(rootDir string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("library: schema: %w", err)
+	}
+	// Migration: add year/subjects/decade columns for databases created before this feature.
+	for _, col := range []string{
+		`ALTER TABLE books ADD COLUMN year INTEGER DEFAULT 0`,
+		`ALTER TABLE books ADD COLUMN subjects_json TEXT DEFAULT '[]'`,
+		`ALTER TABLE books ADD COLUMN decade TEXT DEFAULT ''`,
+	} {
+		db.Exec(col) // errors expected if column already exists
 	}
 	return &Store{db: db, rootDir: rootDir}, nil
 }
@@ -121,11 +133,16 @@ func (s *Store) AddBook(b *Book, f *BookFile) (int64, error) {
 		b.SortTitle = sortTitle(b.Title)
 	}
 	authorsJSON, _ := json.Marshal(b.Authors)
+	subjectsJSON, _ := json.Marshal(b.Subjects)
+	if b.Decade == "" && b.Year > 0 {
+		b.Decade = ComputeDecade(b.Year)
+	}
 
 	res, err := s.db.Exec(`INSERT INTO books
-		(title, sort_title, authors_json, language, description, cover_path, source_id, source_book_id, dedupe_key, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		(title, sort_title, authors_json, language, description, year, subjects_json, decade, cover_path, source_id, source_book_id, dedupe_key, added_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		b.Title, b.SortTitle, string(authorsJSON), b.Language, b.Description,
+		b.Year, string(subjectsJSON), b.Decade,
 		b.CoverPath, b.SourceID, b.SourceBookID, b.DedupeKey, b.AddedAt.Format(time.RFC3339))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "constraint failed") {
@@ -209,8 +226,14 @@ func (s *Store) List(query, sort string, offset, limit int) ([]BookWithFiles, er
 		order = ` ORDER BY sort_title COLLATE NOCASE ASC`
 	case "author":
 		order = ` ORDER BY json_extract(authors_json, '$[0]') COLLATE NOCASE ASC, sort_title COLLATE NOCASE ASC`
-	case "recent":
+	case "recent", "":
 		order = ` ORDER BY added_at DESC`
+	case "year":
+		order = ` ORDER BY year DESC, sort_title COLLATE NOCASE ASC`
+	case "decade":
+		order = ` ORDER BY decade DESC, sort_title COLLATE NOCASE ASC`
+	case "genre":
+		order = ` ORDER BY subjects_json ASC, sort_title COLLATE NOCASE ASC`
 	}
 	var args []any
 	if strings.TrimSpace(query) != "" {
@@ -257,6 +280,46 @@ func (s *Store) ByAuthor(author string, offset, limit int) ([]BookWithFiles, err
 	rows, err := s.db.Query(`SELECT DISTINCT `+bookCols+` FROM books
 		WHERE EXISTS (SELECT 1 FROM json_each(books.authors_json) je WHERE je.value = ?)
 		ORDER BY sort_title COLLATE NOCASE ASC `+limitClause(offset, limit), author)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return s.collect(rows)
+}
+
+// Genres returns distinct first-subject values (genre chips for the UI).
+func (s *Store) Genres() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT je.value FROM books, json_each(books.subjects_json) je
+		WHERE je.value != '' ORDER BY je.value COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var g string
+		if err := rows.Scan(&g); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+// ListByGenre filters books by having a matching value in subjects_json.
+func (s *Store) ListByGenre(genre, sort string, offset, limit int) ([]BookWithFiles, error) {
+	base := `SELECT DISTINCT ` + bookCols + ` FROM books
+		WHERE EXISTS (SELECT 1 FROM json_each(books.subjects_json) je WHERE je.value = ?)`
+	order := ` ORDER BY sort_title COLLATE NOCASE ASC`
+	switch sort {
+	case "year":
+		order = ` ORDER BY year DESC, sort_title COLLATE NOCASE ASC`
+	case "decade":
+		order = ` ORDER BY decade DESC, sort_title COLLATE NOCASE ASC`
+	case "recent":
+		order = ` ORDER BY added_at DESC`
+	}
+	rows, err := s.db.Query(base+order+limitClause(offset, limit), genre)
 	if err != nil {
 		return nil, err
 	}
@@ -330,16 +393,19 @@ func (s *Store) UpdateCover(bookID int64, relPath string) error {
 // --- plumbing ------------------------------------------------------------
 
 const bookCols = `books.id, books.title, books.sort_title, books.authors_json, books.language, books.description,
+	books.year, books.subjects_json, books.decade,
 	books.cover_path, books.source_id, books.source_book_id, books.dedupe_key, books.added_at`
 
 func (s *Store) scanBook(row *sql.Row) (*Book, error) {
 	var b Book
-	var authorsJSON, added string
+	var authorsJSON, subjectsJSON, added string
 	if err := row.Scan(&b.ID, &b.Title, &b.SortTitle, &authorsJSON, &b.Language, &b.Description,
+		&b.Year, &subjectsJSON, &b.Decade,
 		&b.CoverPath, &b.SourceID, &b.SourceBookID, &b.DedupeKey, &added); err != nil {
 		return nil, err
 	}
 	json.Unmarshal([]byte(authorsJSON), &b.Authors)
+	json.Unmarshal([]byte(subjectsJSON), &b.Subjects)
 	b.AddedAt, _ = time.Parse(time.RFC3339, added)
 	return &b, nil
 }
@@ -348,12 +414,14 @@ func (s *Store) collect(rows *sql.Rows) ([]BookWithFiles, error) {
 	var out []BookWithFiles
 	for rows.Next() {
 		var b Book
-		var authorsJSON, added string
+		var authorsJSON, subjectsJSON, added string
 		if err := rows.Scan(&b.ID, &b.Title, &b.SortTitle, &authorsJSON, &b.Language, &b.Description,
+			&b.Year, &subjectsJSON, &b.Decade,
 			&b.CoverPath, &b.SourceID, &b.SourceBookID, &b.DedupeKey, &added); err != nil {
 			return nil, err
 		}
 		json.Unmarshal([]byte(authorsJSON), &b.Authors)
+		json.Unmarshal([]byte(subjectsJSON), &b.Subjects)
 		b.AddedAt, _ = time.Parse(time.RFC3339, added)
 		out = append(out, BookWithFiles{Book: b})
 	}
@@ -368,6 +436,27 @@ func (s *Store) collect(rows *sql.Rows) ([]BookWithFiles, error) {
 		out[i].Files = files
 	}
 	return out, nil
+}
+
+// ComputeDecade returns a decade string like "1920s" from a year.
+func ComputeDecade(year int) string {
+	if year <= 0 {
+		return ""
+	}
+	decade := (year / 10) * 10
+	return strconv.Itoa(decade) + "s"
+}
+
+// ParseYear extracts a year from a string like "2024" or "2024-01-15".
+func ParseYear(s string) int {
+	if s == "" {
+		return 0
+	}
+	y, err := strconv.Atoi(s[:4])
+	if err != nil || y < 0 || y > 3000 {
+		return 0
+	}
+	return y
 }
 
 func limitClause(offset, limit int) string {

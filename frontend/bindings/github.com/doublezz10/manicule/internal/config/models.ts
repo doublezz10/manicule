@@ -69,6 +69,11 @@ export class Settings {
      * sourceID → manual endpoint base URL
      */
     "fleet_overrides"?: { [_ in string]?: string };
+
+    /**
+     * "author-title" (default), "genre-author-title", "decade-author-title"
+     */
+    "filing_mode"?: string;
     "wizard_done": boolean;
 
     /** Creates a new Settings instance. */

@@ -12,33 +12,39 @@ import (
 	"strings"
 )
 
-// epubMeta returns title + authors parsed from the package document.
-func epubMeta(epubPath string) (string, []string) {
+// epubMeta returns title, authors, year, and subjects parsed from the package document.
+func epubMeta(epubPath string) (string, []string, int, []string) {
 	zr, err := zip.OpenReader(epubPath)
 	if err != nil {
-		return "", nil
+		return "", nil, 0, nil
 	}
 	defer zr.Close()
 	opfPath := findOPF(&zr.Reader)
 	if opfPath == "" {
-		return "", nil
+		return "", nil, 0, nil
 	}
 	raw := member(&zr.Reader, opfPath)
 	if raw == nil {
-		return "", nil
+		return "", nil, 0, nil
 	}
 	var pkg struct {
 		Title   []string `xml:"metadata>dc:title"`
 		Creator []string `xml:"metadata>dc:creator"`
+		Date    []string `xml:"metadata>dc:date"`
+		Subject []string `xml:"metadata>dc:subject"`
 	}
 	if xml.Unmarshal(raw, &pkg) != nil {
-		return "", nil
+		return "", nil, 0, nil
 	}
 	title := ""
 	if len(pkg.Title) > 0 {
 		title = strings.TrimSpace(pkg.Title[0])
 	}
-	return title, pkg.Creator
+	year := 0
+	if len(pkg.Date) > 0 {
+		year = ParseYear(pkg.Date[0])
+	}
+	return title, pkg.Creator, year, pkg.Subject
 }
 
 // extractCover returns encoded image bytes + extension for the EPUB's cover.

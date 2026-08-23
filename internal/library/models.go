@@ -12,7 +12,10 @@ type Book struct {
 	Authors      []string  `json:"authors"`
 	Language     string    `json:"language,omitempty"`
 	Description  string    `json:"description,omitempty"`
-	CoverPath    string    `json:"cover_path,omitempty"` // relative to library root
+	Year         int       `json:"year,omitempty"`
+	Subjects     []string  `json:"subjects,omitempty"`
+	Decade       string    `json:"decade,omitempty"` // "1810s", "1920s", or ""
+	CoverPath    string    `json:"cover_path,omitempty"`
 	SourceID     string    `json:"source_id,omitempty"`
 	SourceBookID string    `json:"source_book_id,omitempty"`
 	DedupeKey    string    `json:"-"`
