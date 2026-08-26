@@ -74,6 +74,12 @@ export class Settings {
      * "author-title" (default), "genre-author-title", "decade-author-title"
      */
     "filing_mode"?: string;
+
+    /**
+     * DefaultSource is the catalog quick-download buttons prefer when several
+     * sources carry the same book. Empty = auto (first source with EPUB).
+     */
+    "default_source"?: string;
     "wizard_done": boolean;
 
     /** Creates a new Settings instance. */

@@ -128,11 +128,11 @@ func (s *standardebooks) Search(ctx context.Context, query string, limit int) ([
 			r.Authors = append(r.Authors, a.Name)
 		}
 		for _, l := range e.LinksByType("application/epub+zip") {
-			r.Formats = append(r.Formats, Format{Name: "EPUB", URL: absoluteLink(l.Href, s.base)})
+			r.Formats = append(r.Formats, Format{Name: "EPUB", URL: absoluteLink(l.Href, s.base), Size: l.Length})
 			break
 		}
 		for _, l := range e.LinksByType("application/x-mobipocket-ebook") {
-			r.Formats = append(r.Formats, Format{Name: "MOBI", URL: absoluteLink(l.Href, s.base)})
+			r.Formats = append(r.Formats, Format{Name: "MOBI", URL: absoluteLink(l.Href, s.base), Size: l.Length})
 			break
 		}
 		if len(r.Formats) > 0 {

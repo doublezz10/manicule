@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -74,10 +75,25 @@ type Source interface {
 	Status() Status
 }
 
-// HTTPClient shared by all adapters: sane timeout, polite UA.
+// HTTPClient shared by all adapters: sane timeout, polite UA, IPv4-only
+// dialing. Target machines may run VPN/TUN tools whose IPv6 routes blackhole
+// instead of rejecting, which stalls dual-stack dialing for many seconds;
+// IPv4-only keeps every source, download, and cover fetch fast and
+// predictable (all supported sources are reachable over IPv4).
 func NewHTTPClient() *http.Client {
+	d := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
 	return &http.Client{
 		Timeout: 60 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return d.DialContext(ctx, "tcp4", addr)
+			},
+			ForceAttemptHTTP2: true,
+		},
 	}
 }
 

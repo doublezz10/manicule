@@ -6,6 +6,7 @@ package library
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -45,37 +46,53 @@ func (w *Watcher) Run(ctx context.Context) {
 }
 
 func (w *Watcher) scan() {
-	entries, err := os.ReadDir(w.scanDir)
-	if err != nil {
+	if _, err := os.Stat(w.scanDir); err != nil {
 		slog.Debug("watcher: scan failed", "dir", w.scanDir, "err", err)
 		return
 	}
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || strings.HasPrefix(name, ".") {
-			continue
+
+	// Walk recursively: watched libraries are commonly structured trees
+	// (e.g. Calibre's Author/Title/file.epub), so books rarely sit at the top.
+	var candidates []string
+	err := filepath.WalkDir(w.scanDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable subtree — skip quietly, retry next tick
 		}
-		ext := strings.ToLower(filepath.Ext(name))
-		switch ext {
+		if path != w.scanDir && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		switch strings.ToLower(filepath.Ext(d.Name())) {
 		case ".epub", ".mobi", ".azw3":
-		default:
-			continue
+			candidates = append(candidates, path)
 		}
-		full := filepath.Join(w.scanDir, name)
-		st, err := e.Info()
-		if err != nil || st.IsDir() {
+		return nil
+	})
+	if err != nil {
+		slog.Debug("watcher: walk failed", "dir", w.scanDir, "err", err)
+		return
+	}
+
+	for _, full := range candidates {
+		st, err := os.Stat(full)
+		if err != nil || !st.Mode().IsRegular() {
 			continue
 		}
 		if !w.stableAndNew(full, st.ModTime().UnixNano()) {
 			continue
 		}
-		slog.Info("watcher: importing", "file", name)
+		slog.Info("watcher: importing", "file", filepath.Base(full))
 		if _, err := w.ingestor.ImportFile(context.Background(), full, nil); err != nil {
 			var dup *DuplicateError
-			if !asDup(err, &dup) {
-				slog.Warn("watcher: import failed", "file", name, "err", err)
+			if asDup(err, &dup) {
+				slog.Info("watcher: duplicate skipped", "file", filepath.Base(full))
 			} else {
-				slog.Info("watcher: duplicate skipped", "file", name)
+				slog.Warn("watcher: import failed", "file", filepath.Base(full), "err", err)
 			}
 		}
 	}

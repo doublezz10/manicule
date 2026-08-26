@@ -16,7 +16,7 @@ export function DevicesPage() {
 
   useEffect(() => {
     if (!st?.running || !st.lan_url) return;
-    QRCode.toDataURL(st.lan_url, { width: 220, margin: 1, color: { dark: "#121212", light: "#e8e6e3" } })
+    QRCode.toDataURL(st.lan_url, { width: 220, margin: 1, color: { dark: "#1c1712", light: "#efe6d6" } })
       .then(setQr)
       .catch(() => setQr(""));
   }, [st?.running, st?.lan_url]);
@@ -25,6 +25,7 @@ export function DevicesPage() {
 
   return (
     <>
+      <div className="eyebrow">opds <span className="dot">·</span> your books over wifi</div>
       <h1>Devices</h1>
       {!st.running && (
         <div className="disclaimer" style={{ maxWidth: 720 }}>
@@ -72,10 +73,7 @@ export function DevicesPage() {
         <b> /.crosspoint/opds.json</b>, reinsert — done, no keyboard needed.
         The file contains your feed URL and current PIN in plain text; treat the card like a password note.
       </p>
-      <pre style={{
-        background: "var(--bg-raised)", border: "1px solid var(--border)",
-        borderRadius: 10, padding: 16, fontSize: 12.5, overflowX: "auto", maxWidth: 720,
-      }}>
+      <pre className="code-block">
         {preview}
       </pre>
     </>

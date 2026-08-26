@@ -33,6 +33,28 @@ type Ingestor struct {
 // ImportFile copies srcPath into the library and registers it. meta supplies
 // title/authors/source metadata (watch-folder imports get metadata from
 // filename or EPUB OPF). Returns the stored book.
+// calibreAuthor recognizes "Last, First" and plain names from filename
+// templates; returns "" when the text doesn't look like a name.
+func calibreAuthor(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.ContainsAny(s, "/\\") {
+		return ""
+	}
+	if i := strings.Index(s, ","); i > 0 {
+		last := strings.TrimSpace(s[:i])
+		first := strings.TrimSpace(s[i+1:])
+		switch {
+		case last != "" && first != "":
+			return first + " " + last
+		case last != "":
+			return last
+		default:
+			return ""
+		}
+	}
+	return s
+}
+
 func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) (*BookWithFiles, error) {
 	if _, err := os.Stat(srcPath); err != nil {
 		return nil, fmt.Errorf("ingest: %w", err)
@@ -60,7 +82,7 @@ func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) 
 		meta = &Book{}
 	}
 	if meta.Title == "" || len(meta.Authors) == 0 || meta.Year == 0 {
-		if t, a, y, s := epubMeta(srcPath); t != "" {
+		if t, a, y, s, d := epubMeta(srcPath); t != "" {
 			if meta.Title == "" {
 				meta.Title = t
 			}
@@ -73,11 +95,22 @@ func (in *Ingestor) ImportFile(ctx context.Context, srcPath string, meta *Book) 
 			if len(meta.Subjects) == 0 && len(s) > 0 {
 				meta.Subjects = s
 			}
+			if meta.Description == "" && d != "" {
+				meta.Description = d
+			}
 		}
 	}
 	if meta.Title == "" {
 		base := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath))
 		meta.Title = strings.TrimSpace(strings.ReplaceAll(base, "_", " "))
+		// Calibre's "Title - Last, First" save template leaks the author into
+		// the filename; split it back out so cards don't read "… - Brown, Pierce".
+		if i := strings.LastIndex(meta.Title, " - "); i > 0 {
+			if a := calibreAuthor(meta.Title[i+3:]); a != "" {
+				meta.Title = strings.TrimSpace(meta.Title[:i])
+				meta.Authors = []string{a}
+			}
+		}
 	}
 	if len(meta.Authors) == 0 {
 		meta.Authors = []string{"Unknown"}

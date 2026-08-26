@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS books (
 	year           INTEGER NOT NULL DEFAULT 0,
 	subjects_json  TEXT NOT NULL DEFAULT '[]',
 	decade         TEXT NOT NULL DEFAULT '',
+	author_sort    TEXT NOT NULL DEFAULT '',
 	cover_path     TEXT NOT NULL DEFAULT '',
 	source_id      TEXT NOT NULL DEFAULT '',
 	source_book_id TEXT NOT NULL DEFAULT '',
@@ -109,10 +111,45 @@ func Open(rootDir string) (*Store, error) {
 		`ALTER TABLE books ADD COLUMN year INTEGER DEFAULT 0`,
 		`ALTER TABLE books ADD COLUMN subjects_json TEXT DEFAULT '[]'`,
 		`ALTER TABLE books ADD COLUMN decade TEXT DEFAULT ''`,
+		`ALTER TABLE books ADD COLUMN author_sort TEXT DEFAULT ''`,
 	} {
 		db.Exec(col) // errors expected if column already exists
 	}
+	// Backfill author_sort for rows created before the column existed.
+	backfillAuthorSort(db)
 	return &Store{db: db, rootDir: rootDir}, nil
+}
+
+// backfillAuthorSort computes the last-name-first sort key for any book that
+// doesn't have one yet (imports from before the column existed).
+func backfillAuthorSort(db *sql.DB) {
+	rows, err := db.Query(`SELECT id, authors_json FROM books WHERE author_sort = ''`)
+	if err != nil {
+		return
+	}
+	type pending struct {
+		id  int64
+		key string
+	}
+	var updates []pending
+	for rows.Next() {
+		var id int64
+		var authorsJSON string
+		if err := rows.Scan(&id, &authorsJSON); err != nil {
+			continue
+		}
+		var authors []string
+		if json.Unmarshal([]byte(authorsJSON), &authors) != nil || len(authors) == 0 {
+			continue
+		}
+		updates = append(updates, pending{id: id, key: AuthorSortKey(authors[0])})
+	}
+	rows.Close()
+	for _, u := range updates {
+		if u.key != "" {
+			db.Exec(`UPDATE books SET author_sort = ? WHERE id = ?`, u.key, u.id)
+		}
+	}
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -137,12 +174,16 @@ func (s *Store) AddBook(b *Book, f *BookFile) (int64, error) {
 	if b.Decade == "" && b.Year > 0 {
 		b.Decade = ComputeDecade(b.Year)
 	}
+	authorSort := ""
+	if len(b.Authors) > 0 {
+		authorSort = AuthorSortKey(b.Authors[0])
+	}
 
 	res, err := s.db.Exec(`INSERT INTO books
-		(title, sort_title, authors_json, language, description, year, subjects_json, decade, cover_path, source_id, source_book_id, dedupe_key, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		(title, sort_title, authors_json, language, description, year, subjects_json, decade, author_sort, cover_path, source_id, source_book_id, dedupe_key, added_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		b.Title, b.SortTitle, string(authorsJSON), b.Language, b.Description,
-		b.Year, string(subjectsJSON), b.Decade,
+		b.Year, string(subjectsJSON), b.Decade, authorSort,
 		b.CoverPath, b.SourceID, b.SourceBookID, b.DedupeKey, b.AddedAt.Format(time.RFC3339))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "constraint failed") {
@@ -225,7 +266,7 @@ func (s *Store) List(query, sort string, offset, limit int) ([]BookWithFiles, er
 	case "title":
 		order = ` ORDER BY sort_title COLLATE NOCASE ASC`
 	case "author":
-		order = ` ORDER BY json_extract(authors_json, '$[0]') COLLATE NOCASE ASC, sort_title COLLATE NOCASE ASC`
+		order = ` ORDER BY author_sort COLLATE NOCASE ASC, sort_title COLLATE NOCASE ASC`
 	case "recent", "":
 		order = ` ORDER BY added_at DESC`
 	case "year":
@@ -260,7 +301,7 @@ func (s *Store) Newest(offset, limit int) ([]BookWithFiles, error) {
 
 func (s *Store) Authors() ([]string, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT je.value AS author
-		FROM books, json_each(books.authors_json) je ORDER BY author COLLATE NOCASE`)
+		FROM books, json_each(books.authors_json) je`)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +314,18 @@ func (s *Store) Authors() ([]string, error) {
 		}
 		out = append(out, a)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// shelf order: by surname, not display order
+	sort.Slice(out, func(i, j int) bool {
+		ki, kj := AuthorSortKey(out[i]), AuthorSortKey(out[j])
+		if ki == kj {
+			return out[i] < out[j]
+		}
+		return ki < kj
+	})
+	return out, nil
 }
 
 func (s *Store) ByAuthor(author string, offset, limit int) ([]BookWithFiles, error) {
@@ -387,6 +439,13 @@ func (s *Store) FilesFor(bookID int64) ([]BookFile, error) {
 // UpdateCover sets cover_path after extraction.
 func (s *Store) UpdateCover(bookID int64, relPath string) error {
 	_, err := s.db.Exec(`UPDATE books SET cover_path = ? WHERE id = ?`, relPath, bookID)
+	return err
+}
+
+// UpdateDescription stores a backfilled blurb (FTS trigger keeps the index
+// in sync).
+func (s *Store) UpdateDescription(bookID int64, desc string) error {
+	_, err := s.db.Exec(`UPDATE books SET description = ? WHERE id = ?`, desc, bookID)
 	return err
 }
 

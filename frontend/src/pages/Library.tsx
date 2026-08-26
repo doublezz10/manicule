@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { backend, onEvent } from "../lib/api";
 import { useToast } from "../App";
 import { ManiculeMark } from "../components/icons";
+import { LibraryBookModal } from "../components/BookModal";
 
 interface BookFileT {
   id: number;
@@ -33,6 +34,7 @@ export function LibraryPage() {
   const [sort, setSort] = useState("recent");
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [port, setPort] = useState(8787);
+  const [detail, setDetail] = useState<BookT | null>(null);
 
   useEffect(() => {
     backend.serverStatus().then((st) => st?.port && setPort(st.port));
@@ -61,8 +63,12 @@ export function LibraryPage() {
 
   return (
     <>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
-        <h1 style={{ margin: 0, flex: 1 }}>Library</h1>
+      <div className="eyebrow">
+        your collection
+        {books.length > 0 && (<><span className="dot">·</span>{books.length} book{books.length === 1 ? "" : "s"}</>)}
+      </div>
+      <div className="page-head">
+        <h1>Library</h1>
         <input
           type="text"
           placeholder="Search your library…"
@@ -107,71 +113,79 @@ export function LibraryPage() {
 
       {books.length === 0 && (
         <div className="empty">
-          <div className="big">📚</div>
-          Your library is empty.<br />
+          <div className="big"><ManiculeMark size={46} /></div>
+          <div className="empty-title">Every library starts at zero.</div>
           Download something from Search, or drop EPUBs into the watch folder (Settings).
         </div>
       )}
 
       <div className="cover-grid">
-        {books.map((b) => (
-          <div className="cover-card" key={b.book.id}>
-            <Cover id={b.book.id} hasCover={!!b.book.cover_path} title={b.book.title} port={port} />
-            <div className="cover-title">{b.book.title}</div>
-            <div className="cover-author">{b.book.authors.join(", ")}</div>
-            <div className="cover-meta">
-              {b.book.year ? <span className="pill">{b.book.year}</span> : null}
-              {b.book.decade ? <span className="pill">{b.book.decade}</span> : null}
-              {b.book.subjects?.[0] ? <span className="pill">{b.book.subjects[0]}</span> : null}
-            </div>
-            <div className="card-actions">
-              {b.files.filter((f) => f.is_original).map((f) => (
-                <a key={f.id} href={`http://localhost:${port}/download/${b.book.id}/${f.id}`} target="_blank" rel="noreferrer">
-                  <button className="small">{f.format}</button>
-                </a>
-              ))}
-              {b.files.some((f) => !f.is_original) && (
-                <span className="pill ok" title="A cleaned copy sits alongside the original">cleaned</span>
+        {books.map((b) => {
+          const author = b.book.authors.filter((a) => a && a !== "Unknown").join(", ");
+          return (
+            <div
+              className="cover-card clickable"
+              key={b.book.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Details for ${b.book.title}`}
+              onClick={() => setDetail(b)}
+              onKeyDown={(e) => e.key === "Enter" && setDetail(b)}
+            >
+              <Cover id={b.book.id} hasCover={!!b.book.cover_path} title={b.book.title} port={port} />
+              <div className="cover-title">{b.book.title}</div>
+              {author && <div className="cover-author">{author}</div>}
+              {(b.book.year || b.book.subjects?.[0]) && (
+                <div className="cover-meta">
+                  {b.book.year ? <span className="pill">{b.book.year}</span> : null}
+                  {b.book.subjects?.[0] ? <span className="pill">{b.book.subjects[0]}</span> : null}
+                </div>
               )}
-              <button
-                className="small"
-                title="Delete the derived clean file; the master is untouched"
-                onClick={async () => {
-                  await backend.revertClean(b.book.id);
-                  toastCtx.push("ok", "Cleaned copy removed — original untouched");
-                }}
-              >
-                revert clean
-              </button>
-              <button
-                className="small"
-                title="Move to OS trash"
-                onClick={async () => {
-                  if (!confirm(`Move "${b.book.title}" to trash?`)) return;
-                  await backend.deleteBook(b.book.id);
-                  refresh();
-                }}
-              >
-                delete
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {detail && (
+        <LibraryBookModal
+          book={detail.book}
+          files={detail.files}
+          port={port}
+          onClose={() => setDetail(null)}
+          onDownloadFile={(fileId) =>
+            backend
+              .openExternal(`http://localhost:${port}/download/${detail.book.id}/${fileId}`)
+              .catch((e) => toastCtx.push("error", e?.message ?? String(e)))
+          }
+          onRevertClean={async () => {
+            await backend.revertClean(detail.book.id);
+            toastCtx.push("ok", "Cleaned copy removed — original untouched");
+            setDetail(null);
+            refresh();
+          }}
+          onDelete={async () => {
+            if (!confirm(`Move "${detail.book.title}" to trash?`)) return;
+            await backend.deleteBook(detail.book.id);
+            setDetail(null);
+            refresh();
+          }}
+        />
+      )}
     </>
   );
 }
 
 function Cover(props: { id: number; hasCover: boolean; title: string; port: number }) {
-  if (!props.hasCover) {
-    return <div className="cover-img" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 30 }}>☞</div>;
+  const [failed, setFailed] = useState(false);
+  if (!props.hasCover || failed) {
+    return <div className="cover-fallback"><ManiculeMark size={30} /></div>;
   }
   return (
     <img
       className="cover-img"
       src={`http://localhost:${props.port}/cover/${props.id}.jpg`}
       alt={props.title}
-      onError={(ev: React.SyntheticEvent<HTMLImageElement>) => { ev.currentTarget.style.visibility = "hidden"; }}
+      onError={() => setFailed(true)}
     />
   );
 }

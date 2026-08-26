@@ -32,6 +32,14 @@ export function AttachTray(tray: application$0.SystemTray | null): $CancellableP
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.AttachTray", tray);
 }
 
+/**
+ * BookBlurb returns the description for a library book: stored text first,
+ * otherwise a one-time Open Library backfill that is then persisted.
+ */
+export function BookBlurb(id: number): $CancellablePromise<string> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.BookBlurb", id);
+}
+
 export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.CancelTask", id);
 }
@@ -120,10 +128,28 @@ export function ListLibrary(query: string, sort: string, page: number): $Cancell
 }
 
 /**
+ * OpenExternal hands a URL to the OS default browser. The webview blocks
+ * target=_blank navigation, so every outbound link (Ko-fi, library file
+ * downloads) routes through this binding instead.
+ */
+export function OpenExternal(rawURL: string): $CancellablePromise<void> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.OpenExternal", rawURL);
+}
+
+/**
  * PickFolder opens the native directory chooser (wizard + settings).
  */
 export function PickFolder(title: string): $CancellablePromise<string> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.PickFolder", title);
+}
+
+/**
+ * ProbeFileSize HEADs a catalog download URL and returns its Content-Length
+ * in bytes, for sources that don't advertise sizes in their search payload.
+ * Cached per URL for the session.
+ */
+export function ProbeFileSize(rawURL: string): $CancellablePromise<number> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.ProbeFileSize", rawURL);
 }
 
 /**
@@ -198,6 +224,14 @@ export function TrayMenu(): $CancellablePromise<application$0.Menu | null> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.TrayMenu").then(($result: any) => {
         return $$createType17($result);
     });
+}
+
+/**
+ * WorkDescription returns a short blurb for a title/author pair, backfilled
+ * from Open Library when the originating catalog didn't carry one.
+ */
+export function WorkDescription(title: string, authors: string[]): $CancellablePromise<string> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.WorkDescription", title, authors);
 }
 
 // Private type creation functions

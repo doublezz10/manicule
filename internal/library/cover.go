@@ -12,29 +12,31 @@ import (
 	"strings"
 )
 
-// epubMeta returns title, authors, year, and subjects parsed from the package document.
-func epubMeta(epubPath string) (string, []string, int, []string) {
+// epubMeta returns title, authors, year, subjects, and description parsed
+// from the package document.
+func epubMeta(epubPath string) (string, []string, int, []string, string) {
 	zr, err := zip.OpenReader(epubPath)
 	if err != nil {
-		return "", nil, 0, nil
+		return "", nil, 0, nil, ""
 	}
 	defer zr.Close()
 	opfPath := findOPF(&zr.Reader)
 	if opfPath == "" {
-		return "", nil, 0, nil
+		return "", nil, 0, nil, ""
 	}
 	raw := member(&zr.Reader, opfPath)
 	if raw == nil {
-		return "", nil, 0, nil
+		return "", nil, 0, nil, ""
 	}
 	var pkg struct {
-		Title   []string `xml:"metadata>dc:title"`
-		Creator []string `xml:"metadata>dc:creator"`
-		Date    []string `xml:"metadata>dc:date"`
-		Subject []string `xml:"metadata>dc:subject"`
+		Title       []string `xml:"metadata>dc:title"`
+		Creator     []string `xml:"metadata>dc:creator"`
+		Date        []string `xml:"metadata>dc:date"`
+		Subject     []string `xml:"metadata>dc:subject"`
+		Description []string `xml:"metadata>dc:description"`
 	}
 	if xml.Unmarshal(raw, &pkg) != nil {
-		return "", nil, 0, nil
+		return "", nil, 0, nil, ""
 	}
 	title := ""
 	if len(pkg.Title) > 0 {
@@ -44,7 +46,11 @@ func epubMeta(epubPath string) (string, []string, int, []string) {
 	if len(pkg.Date) > 0 {
 		year = ParseYear(pkg.Date[0])
 	}
-	return title, pkg.Creator, year, pkg.Subject
+	desc := ""
+	if len(pkg.Description) > 0 {
+		desc = strings.TrimSpace(pkg.Description[0])
+	}
+	return title, pkg.Creator, year, pkg.Subject, desc
 }
 
 // extractCover returns encoded image bytes + extension for the EPUB's cover.

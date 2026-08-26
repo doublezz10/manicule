@@ -44,6 +44,7 @@ export function SettingsPage() {
 
   return (
     <>
+      <div className="eyebrow">preferences <span className="dot">·</span> set once, forget</div>
       <h1>Settings</h1>
 
       <div className="settings-section">
@@ -132,6 +133,20 @@ export function SettingsPage() {
 
       <div className="settings-section">
         <h2 style={{ marginTop: 0 }}>Sources</h2>
+        <div className="setting-row">
+          <label>Default download source<span className="hint">Quick +EPUB buttons prefer this catalog when several carry the same book</span></label>
+          <select
+            value={s.default_source || ""}
+            onChange={(e) => save({ default_source: e.target.value })}
+          >
+            <option value="">Auto — first with EPUB</option>
+            <option value="gutendex">Project Gutenberg</option>
+            <option value="standardebooks">Standard Ebooks</option>
+            <option value="z-library">Z-Library</option>
+            <option value="annas-archive">Anna's Archive</option>
+            <option value="libgen">Library Genesis</option>
+          </select>
+        </div>
         {["gutendex"].map((id) => (
           <div className="setting-row" key={id}>
             <label>Project Gutenberg<span className="hint">~75k public-domain titles · no account needed · Tier 1</span></label>
@@ -140,12 +155,19 @@ export function SettingsPage() {
         ))}
         {["standardebooks"].map((id) => (
           <div className="setting-row" key={id}>
-            <label>Standard Ebooks<span className="hint">~1k pristine classics · needs free Patrons Circle email (blank password) · Tier 1</span></label>
+            <label>Standard Ebooks<span className="hint">~1k pristine classics · free Patrons Circle account · Tier 1</span></label>
+            <Toggle on={!!s.sources_enabled[id]} onChange={(v) => save({ sources_enabled: { [id]: v } })} />
+          </div>
+        ))}
+        {!!s.sources_enabled["standardebooks"] && (
+          <div className="setting-row">
+            <label>Patrons Circle email<span className="hint">Free account · password stays blank</span></label>
             <SEEmail
+              initial={s.source_credentials?.standardebooks?.email ?? ""}
               onSave={(email) => save({ source_credentials: { standardebooks: { email } } })}
             />
           </div>
-        ))}
+        )}
         <div className="setting-row">
           <label>Open Library<span className="hint">Metadata + covers · enriches search results and auto-fills missing covers · Tier 1</span></label>
           <Toggle on={!!s.sources_enabled["openlibrary"]} onChange={(v) => save({ sources_enabled: { openlibrary: v } })} />
@@ -190,8 +212,14 @@ export function SettingsPage() {
       <div className="settings-section">
         <h2 style={{ marginTop: 0 }}>About</h2>
         <div className="setting-row">
-          <label>manicule ☞<span className="hint">Free open-source software, MIT licensed. No accounts, no telemetry.</span></label>
-          <a href="https://ko-fi.com/doublezz10" target="_blank" rel="noreferrer"><button>Ko-fi ☕</button></a>
+          <label>manicule<span className="hint">Free open-source software, MIT licensed. No accounts, no telemetry.</span></label>
+          <button
+            onClick={() =>
+              backend.openExternal("https://ko-fi.com/doublezz10").catch((e) => toastCtx.push("error", e?.message ?? String(e)))
+            }
+          >
+            Ko-fi ☕
+          </button>
         </div>
         <div className="setting-row">
           <label>Updates<span className="hint">Checks GitHub releases once, on click</span></label>
@@ -210,8 +238,8 @@ export function SettingsPage() {
   );
 }
 
-function SEEmail(props: { onSave: (email: string) => void }) {
-  const [email, setEmail] = useState("");
+function SEEmail(props: { initial?: string; onSave: (email: string) => void }) {
+  const [email, setEmail] = useState(props.initial ?? "");
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <input

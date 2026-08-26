@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,6 +146,21 @@ func (m *Manicule) PickFolder(title string) (string, error) {
 	return path, err
 }
 
+// OpenExternal hands a URL to the OS default browser. The webview blocks
+// target=_blank navigation, so every outbound link (Ko-fi, library file
+// downloads) routes through this binding instead.
+func (m *Manicule) OpenExternal(rawURL string) error {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("only http(s) URLs can be opened")
+	}
+	a := application.Get()
+	if a == nil || a.Browser == nil {
+		return fmt.Errorf("app is not running")
+	}
+	return a.Browser.OpenURL(u.String())
+}
+
 // --- settings / wizard -------------------------------------------------------
 
 func (m *Manicule) GetSettings() *config.Settings { return m.settings }
@@ -166,6 +182,7 @@ type SaveSettingsRequest struct {
 	FleetOverrideSource *string                      `json:"fleet_override_source,omitempty"`
 	FleetOverrideURL    *string                      `json:"fleet_override_url,omitempty"`
 	FilingMode          *string                      `json:"filing_mode,omitempty"`
+	DefaultSource       *string                      `json:"default_source,omitempty"`
 }
 
 // SaveSettings applies a partial update and persists it. Heavyweight side
@@ -206,6 +223,9 @@ func (m *Manicule) SaveSettings(req SaveSettingsRequest) (*config.Settings, erro
 	}
 	if req.DeleteAfter != nil {
 		s.DeleteSourceAfterImport = *req.DeleteAfter
+	}
+	if req.DefaultSource != nil {
+		s.DefaultSource = strings.TrimSpace(*req.DefaultSource)
 	}
 	watchChanged := false
 	if req.WatchEnabled != nil && *req.WatchEnabled != s.WatchEnabled {

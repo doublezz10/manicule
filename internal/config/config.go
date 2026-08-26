@@ -42,6 +42,10 @@ type Settings struct {
 
 	FilingMode string `json:"filing_mode,omitempty"` // "author-title" (default), "genre-author-title", "decade-author-title"
 
+	// DefaultSource is the catalog quick-download buttons prefer when several
+	// sources carry the same book. Empty = auto (first source with EPUB).
+	DefaultSource string `json:"default_source,omitempty"`
+
 	WizardDone bool `json:"wizard_done"`
 }
 

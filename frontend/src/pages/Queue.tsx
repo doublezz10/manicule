@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { backend, onEvent, type QueueTask } from "../lib/api";
 import { useToast } from "../App";
+import { ManiculeMark } from "../components/icons";
 
 export function QueuePage() {
   const toastCtx = useToast();
@@ -14,15 +15,20 @@ export function QueuePage() {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0, flex: 1 }}>Queue</h1>
+      <div className="eyebrow">
+        downloads
+        {tasks.length > 0 && (<><span className="dot">·</span>{tasks.length} in flight</>)}
+      </div>
+      <div className="page-head">
+        <h1>Queue</h1>
         <button onClick={() => backend.clearFinishedQueue()}>Clear finished</button>
       </div>
 
       {tasks.length === 0 && (
         <div className="empty">
-          <div className="big">⇣</div>
-          Nothing downloading.<br />Find a book on the Search page and hit +EPUB.
+          <div className="big"><ManiculeMark size={46} /></div>
+          <div className="empty-title">Nothing in flight.</div>
+          Find a book on the Search page and hit +EPUB.
         </div>
       )}
 

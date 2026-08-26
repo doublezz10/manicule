@@ -21,10 +21,11 @@ const (
 )
 
 type OPDSLink struct {
-	Rel   string `xml:"rel,attr"`
-	Href  string `xml:"href,attr"`
-	Type  string `xml:"type,attr"`
-	Title string `xml:"title,attr"`
+	Rel    string `xml:"rel,attr"`
+	Href   string `xml:"href,attr"`
+	Type   string `xml:"type,attr"`
+	Title  string `xml:"title,attr"`
+	Length int64  `xml:"length,attr"` // bytes, when the feed advertises it
 }
 
 type OPDSText struct {

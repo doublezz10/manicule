@@ -7,7 +7,8 @@ import React from "react";
 
 export function ManiculeMark(props: { size?: number; className?: string }) {
   const s = props.size ?? 24;
-  // Silhouette union: cuff, thumb, fist, index finger — reads at 16px and 96px.
+  // Single-outline hand: fist, notched index finger, thumb bump; the cuff
+  // floats free with a gap so the silhouette reads at any size.
   return (
     <svg
       className={props.className}
@@ -18,10 +19,9 @@ export function ManiculeMark(props: { size?: number; className?: string }) {
       aria-hidden="true"
       style={{ flexShrink: 0 }}
     >
-      <rect x="2" y="13" width="15" height="28" rx="4.5" />
-      <circle cx="21" cy="11.5" r="6.5" />
-      <rect x="14" y="7" width="29" height="35" rx="9" />
-      <rect x="33" y="14.5" width="29" height="12" rx="6" />
+      <rect x="3" y="14" width="13" height="26" rx="4" />
+      <ellipse cx="26" cy="10" rx="6.5" ry="5" />
+      <path d="M27 9 H33 C40 9 43 12 44 17 L56 17 A4.75 4.75 0 0 1 56 26.5 L45 26.5 C44 30 43.5 33 42.5 36 Q41.5 41 36 41 L27 41 Q19 41 19 34 L19 16 Q19 9 27 9 Z" />
     </svg>
   );
 }

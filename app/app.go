@@ -167,6 +167,10 @@ func credentialsFor(s *config.Settings, id string) sources.Credentials {
 
 // --- search ----------------------------------------------------------------
 
+// metadataOnly sources enrich the app (covers, description backfill) but
+// offer no downloads, so they never appear as search result providers.
+var metadataOnly = map[string]bool{"openlibrary": true}
+
 // SearchAll fans out to every enabled source in parallel and groups results
 // by source — no fake unified ranking (§2). Own-library hits come through
 // ListLibrary from the same UI bar.
@@ -180,8 +184,11 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 	var mu sync.Mutex
 
 	for _, src := range m.registry.All() {
+		if metadataOnly[src.ID()] {
+			continue
+		}
 		enabled := m.settings.SourcesEnabled[src.ID()]
-		g := SearchGroup{SourceID: src.ID(), SourceName: src.Name()}
+		g := SearchGroup{SourceID: src.ID(), SourceName: src.Name(), State: "searching"}
 		if !enabled {
 			g.State = "disabled"
 		} else if src.NeedsAuth() {
@@ -200,10 +207,13 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			start := time.Now()
 			res, err := src.Search(ctx, q, 24)
+			elapsed := time.Since(start)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
+				slog.Warn("search source failed", "source", src.ID(), "elapsed", elapsed.String(), "err", err)
 				if errors.Is(err, sources.ErrNeedsAuth) {
 					groups[idx].State = "needs-auth"
 				} else {
@@ -212,6 +222,7 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 				}
 				return
 			}
+			slog.Info("search source ok", "source", src.ID(), "elapsed", elapsed.String(), "results", len(res))
 			groups[idx].State = "ok"
 			groups[idx].Results = res
 		}(src, idx)

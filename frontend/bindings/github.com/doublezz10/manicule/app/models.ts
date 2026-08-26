@@ -26,6 +26,7 @@ export class SaveSettingsRequest {
     "fleet_override_source"?: string | null;
     "fleet_override_url"?: string | null;
     "filing_mode"?: string | null;
+    "default_source"?: string | null;
 
     /** Creates a new SaveSettingsRequest instance. */
     constructor($$source: Partial<SaveSettingsRequest> = {}) {
