@@ -62,13 +62,17 @@ type Status struct {
 // Credentials is the user-supplied auth material a source may need.
 type Credentials map[string]string
 
+// ProgressFunc reports bytes copied so far and the advertised total.
+// total is 0 when the source does not announce a size.
+type ProgressFunc func(done, total int64)
+
 // Source is the trait every adapter implements.
 type Source interface {
 	ID() string
 	Name() string
 	Tier() int
 	Search(ctx context.Context, query string, limit int) ([]Result, error)
-	Download(ctx context.Context, f Format, w io.Writer) error
+	Download(ctx context.Context, f Format, w io.Writer, onProgress ProgressFunc) error
 	NeedsAuth() bool
 	SetCredentials(Credentials)
 	SetBaseURL(base string) // fleet-selected endpoint; empty = default
@@ -154,3 +158,35 @@ var ErrNoResults = fmt.Errorf("no results")
 
 // ErrNeedsAuth tells the UI to surface the credentials flow for a source.
 var ErrNeedsAuth = fmt.Errorf("source requires credentials")
+
+// CopyWithProgress streams r into w, invoking onProgress with the cumulative
+// count and the advertised total after every chunk (and once up-front so the
+// UI can size the bar before the first byte lands).
+func CopyWithProgress(w io.Writer, r io.Reader, total int64, onProgress ProgressFunc) error {
+	if onProgress == nil {
+		_, err := io.Copy(w, r)
+		return err
+	}
+	if total < 0 {
+		total = 0
+	}
+	onProgress(0, total)
+	buf := make([]byte, 32*1024)
+	var done int64
+	for {
+		n, rerr := r.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return werr
+			}
+			done += int64(n)
+			onProgress(done, total)
+		}
+		if rerr == io.EOF {
+			return nil
+		}
+		if rerr != nil {
+			return rerr
+		}
+	}
+}

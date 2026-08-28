@@ -519,6 +519,39 @@ button.ghost:hover { color: var(--err); border-color: transparent; background: t
 
 @keyframes pulse { 50% { opacity: 0.3; } }
 
+.queue-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+}
+.queue-progress-track {
+  flex: 1;
+  max-width: 320px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--well);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.queue-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brass);
+  transition: width 0.3s ease;
+}
+.queue-progress-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* live download state on search cards — the rubric marks what's working */
+.pill.dl { color: var(--rubric-bright); border-color: color-mix(in srgb, var(--rubric) 55%, transparent); }
+.pill.dl.dim { opacity: 0.7; }
+
 /* ---------- settings ---------- */
 
 .settings-section {

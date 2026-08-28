@@ -198,6 +198,12 @@ export function SaveSettings(req: $models.SaveSettingsRequest): $CancellableProm
  * SearchAll fans out to every enabled source in parallel and groups results
  * by source — no fake unified ranking (§2). Own-library hits come through
  * ListLibrary from the same UI bar.
+ * 
+ * Results stream to the frontend: a search:start event carries the per-source
+ * skeletons the moment the fan-out begins, and each source emits search:group
+ * as it finishes, so the UI paints the fastest catalog long before the slowest
+ * one returns. The blocking return value stays the final, complete answer
+ * (and serves repeat queries from a short-lived cache).
  */
 export function SearchAll(query: string): $CancellablePromise<$models.SearchGroup[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.SearchAll", query).then(($result: any) => {

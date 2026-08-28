@@ -26,11 +26,11 @@ import (
 )
 
 type zlibrary struct {
-	client *http.Client
-	base   string      // user-supplied mirror, e.g. "https://singlelogin.re"
-	creds  Credentials
-	mu     sync.Mutex
-	session string    // session cookie value, set after login
+	client     *http.Client
+	base       string // user-supplied mirror, e.g. "https://singlelogin.re"
+	creds      Credentials
+	mu         sync.Mutex
+	session    string // session cookie value, set after login
 	lastStatus Status
 }
 
@@ -49,20 +49,20 @@ type zlLoginResponse struct {
 }
 
 type zlSearchResponse struct {
-	Books    []zlBook `json:"books"`
-	Total    int      `json:"total"`
-	Page     int      `json:"page"`
-	Limit    int      `json:"limit"`
+	Books []zlBook `json:"books"`
+	Total int      `json:"total"`
+	Page  int      `json:"page"`
+	Limit int      `json:"limit"`
 }
 
 type zlBook struct {
 	ID          int     `json:"id"`
 	Title       string  `json:"title"`
-	Authors     string  `json:"authors"`   // comma-separated
+	Authors     string  `json:"authors"` // comma-separated
 	Language    string  `json:"language"`
-	Extension   string  `json:"extension"`  // "epub", "pdf", etc.
-	Hash        string  `json:"hash"`       // download hash
-	Cover       string  `json:"cover"`      // cover image path
+	Extension   string  `json:"extension"` // "epub", "pdf", etc.
+	Hash        string  `json:"hash"`      // download hash
+	Cover       string  `json:"cover"`     // cover image path
 	Description string  `json:"description"`
 	Year        string  `json:"year"`
 	Filesize    float64 `json:"filesize"`
@@ -283,7 +283,7 @@ func (z *zlibrary) Search(ctx context.Context, query string, limit int) ([]Resul
 
 // --- Download ---
 
-func (z *zlibrary) Download(ctx context.Context, f Format, w io.Writer) error {
+func (z *zlibrary) Download(ctx context.Context, f Format, w io.Writer, onProgress ProgressFunc) error {
 	resp, err := z.doAuth(ctx, http.MethodGet, f.URL, nil)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func (z *zlibrary) Download(ctx context.Context, f Format, w io.Writer) error {
 		return fmt.Errorf("z-library: download HTTP %d", resp.StatusCode)
 	}
 
-	if _, err := io.Copy(w, resp.Body); err != nil {
+	if err := CopyWithProgress(w, resp.Body, resp.ContentLength, onProgress); err != nil {
 		z.mu.Lock()
 		z.lastStatus = Status{SourceID: z.ID(), State: "error", Message: err.Error()}
 		z.mu.Unlock()

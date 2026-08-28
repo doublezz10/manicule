@@ -31,6 +31,7 @@ const (
 type Task struct {
 	ID         string         `json:"id"`
 	SourceID   string         `json:"source_id"`
+	ResultID   string         `json:"result_id,omitempty"` // source-specific book id, for UI correlation
 	Title      string         `json:"title"`
 	Authors    []string       `json:"authors"`
 	CoverURL   string         `json:"cover_url,omitempty"`
@@ -38,6 +39,8 @@ type Task struct {
 	State      State          `json:"state"`
 	Error      string         `json:"error,omitempty"`
 	BookID     int64          `json:"book_id,omitempty"`
+	BytesDone  int64          `json:"bytes_done"`
+	BytesTotal int64          `json:"bytes_total"` // 0 = unknown
 	AddedAt    time.Time      `json:"added_at"`
 	result     sources.Result `json:"-"`
 	format     sources.Format
@@ -50,6 +53,10 @@ type Manager struct {
 	tasks  []*Task
 	sem    chan struct{}
 	cancel map[string]context.CancelFunc
+
+	// progress events are throttled so the UI gets ~4 updates/sec, not one
+	// per network chunk
+	lastProgressEmit time.Time
 
 	store      *library.Store
 	cleanOn    bool
@@ -112,6 +119,7 @@ func (m *Manager) Enqueue(r sources.Result, format sources.Format) *Task {
 	t := &Task{
 		ID:         newID(),
 		SourceID:   r.SourceID,
+		ResultID:   r.ID,
 		Title:      r.Title,
 		Authors:    r.Authors,
 		CoverURL:   r.CoverURL,
@@ -194,6 +202,21 @@ func (m *Manager) run(t *Task) {
 	m.emit("library:changed", nil)
 }
 
+// setProgress records byte counts on a task; it returns true when the caller
+// should emit a queue event (throttled so chunk-level callbacks don't flood
+// the UI bridge).
+func (m *Manager) setProgress(t *Task, done, total int64) bool {
+	m.mu.Lock()
+	t.BytesDone = done
+	t.BytesTotal = total
+	emit := time.Since(m.lastProgressEmit) >= 250*time.Millisecond
+	if emit {
+		m.lastProgressEmit = time.Now()
+	}
+	m.mu.Unlock()
+	return emit
+}
+
 // downloadWithRetry streams the file; on transport failure it re-probes the
 // source's fleet endpoints so the next candidate URL is chosen (failover at
 // link-selection, never mid-download).
@@ -213,7 +236,11 @@ func (m *Manager) downloadWithRetry(ctx context.Context, t *Task, dest string) e
 		if !ok {
 			err = fmt.Errorf("source %q unavailable", t.SourceID)
 		} else {
-			err = src.Download(ctx, t.format, f)
+			err = src.Download(ctx, t.format, f, func(done, total int64) {
+				if m.setProgress(t, done, total) {
+					m.emit("queue:changed", m.Snapshot())
+				}
+			})
 		}
 		f.Close()
 		if err == nil {

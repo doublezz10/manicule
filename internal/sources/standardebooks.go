@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
 type standardebooks struct {
@@ -23,6 +25,10 @@ type standardebooks struct {
 	feed       string // path to OPDS root, default /feeds/opds
 	creds      Credentials
 	lastStatus Status
+
+	tmplMu      sync.Mutex
+	searchTmpl  string    // cached OpenSearch URL template
+	tmplSavedAt time.Time // zero until first successful resolve
 }
 
 func NewStandardEbooks(client *http.Client) Source {
@@ -81,16 +87,23 @@ func (s *standardebooks) fetchFeed(ctx context.Context, feedURL string) (*OPDSFe
 	return ParseOPDSFeed(resp.Body)
 }
 
-func (s *standardebooks) Search(ctx context.Context, query string, limit int) ([]Result, error) {
-	if strings.TrimSpace(query) == "" || s.NeedsAuth() {
-		return nil, ErrNeedsAuth
+// searchTemplate returns the OpenSearch URL template, caching it for an hour.
+// Resolving it fresh costs two sequential round trips (root feed, then the
+// description document) before the actual search — the cache turns every
+// repeat search into a single request.
+func (s *standardebooks) searchTemplate(ctx context.Context) (string, error) {
+	s.tmplMu.Lock()
+	tmpl, age := s.searchTmpl, time.Since(s.tmplSavedAt)
+	s.tmplMu.Unlock()
+	if tmpl != "" && age < time.Hour {
+		return tmpl, nil
 	}
-	rootURL := s.base + s.feed
-	root, err := s.fetchFeed(ctx, rootURL)
+
+	root, err := s.fetchFeed(ctx, s.base+s.feed)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	tmpl, _ := ResolveOpenSearchTemplate(func(u string) (io.ReadCloser, error) {
+	tmpl, _ = ResolveOpenSearchTemplate(func(u string) (io.ReadCloser, error) {
 		resp, err := httpGet(ctx, s.client, u, &s.creds)
 		if err != nil {
 			return nil, err
@@ -101,10 +114,26 @@ func (s *standardebooks) Search(ctx context.Context, query string, limit int) ([
 		}
 		return resp.Body, nil
 	}, s.base+s.feed, root)
+	if tmpl == "" {
+		tmpl = s.base + s.feed + "/search?query={searchTerms}"
+	}
+	s.tmplMu.Lock()
+	s.searchTmpl = tmpl
+	s.tmplSavedAt = time.Now()
+	s.tmplMu.Unlock()
+	return tmpl, nil
+}
 
+func (s *standardebooks) Search(ctx context.Context, query string, limit int) ([]Result, error) {
+	if strings.TrimSpace(query) == "" || s.NeedsAuth() {
+		return nil, ErrNeedsAuth
+	}
+	tmpl, err := s.searchTemplate(ctx)
+	if err != nil {
+		return nil, err
+	}
 	searchURL := strings.Replace(tmpl, "{searchTerms}", url.QueryEscape(query), 1)
-	searchURL = absoluteLink(searchURL, s.base)
-	feed, err := s.fetchFeed(ctx, searchURL)
+	feed, err := s.fetchFeed(ctx, absoluteLink(searchURL, s.base))
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +175,8 @@ func (s *standardebooks) Search(ctx context.Context, query string, limit int) ([
 	return out, nil
 }
 
-func (s *standardebooks) Download(ctx context.Context, f Format, w io.Writer) error {
-	err := streamTo(ctx, s.client, f.URL, &s.creds, w)
+func (s *standardebooks) Download(ctx context.Context, f Format, w io.Writer, onProgress ProgressFunc) error {
+	err := streamTo(ctx, s.client, f.URL, &s.creds, w, onProgress)
 	if err != nil {
 		s.lastStatus = Status{SourceID: s.ID(), State: "error", Message: err.Error()}
 		return err

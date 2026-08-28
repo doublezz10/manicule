@@ -36,19 +36,19 @@ func NewOpenLibrary(client *http.Client) Source {
 // --- OL API response types ---
 
 type olSearchResponse struct {
-	NumFound int      `json:"numFound"`
-	Docs     []olDoc  `json:"docs"`
+	NumFound int     `json:"numFound"`
+	Docs     []olDoc `json:"docs"`
 }
 
 type olDoc struct {
-	Key              string   `json:"key"`                // /works/OL12345W
+	Key              string   `json:"key"` // /works/OL12345W
 	Title            string   `json:"title"`
 	AuthorName       []string `json:"author_name"`
 	FirstPublishYear int      `json:"first_publish_year"`
-	CoverI           int      `json:"cover_i"`            // cover image ID
+	CoverI           int      `json:"cover_i"` // cover image ID
 	Language         []string `json:"language"`
 	Subject          []string `json:"subject"`
-	IA               []string `json:"ia"`                 // Internet Archive IDs
+	IA               []string `json:"ia"` // Internet Archive IDs
 	HasFulltext      bool     `json:"has_fulltext"`
 }
 
@@ -58,9 +58,9 @@ func (o *openlibrary) ID() string   { return "openlibrary" }
 func (o *openlibrary) Name() string { return "Open Library" }
 func (o *openlibrary) Tier() int    { return 1 }
 
-func (o *openlibrary) NeedsAuth() bool { return false }
+func (o *openlibrary) NeedsAuth() bool            { return false }
 func (o *openlibrary) SetCredentials(Credentials) {}
-func (o *openlibrary) SetBaseURL(base string) {}
+func (o *openlibrary) SetBaseURL(base string)     {}
 func (o *openlibrary) Status() Status {
 	return Status{SourceID: o.ID(), State: "ready"}
 }
@@ -120,7 +120,7 @@ func (o *openlibrary) Search(ctx context.Context, query string, limit int) ([]Re
 	return out, nil
 }
 
-func (o *openlibrary) Download(ctx context.Context, f Format, w io.Writer) error {
+func (o *openlibrary) Download(ctx context.Context, f Format, w io.Writer, onProgress ProgressFunc) error {
 	return fmt.Errorf("open library: download not supported — use Gutenberg, Standard Ebooks, or Z-Library for acquisition")
 }
 

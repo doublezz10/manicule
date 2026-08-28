@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { backend, type SearchResult, type SearchGroup } from "../lib/api";
+import React, { useEffect, useRef, useState } from "react";
+import { backend, onEvent, type QueueTask, type SearchResult, type SearchGroup } from "../lib/api";
 import { useToast } from "../App";
 import { ManiculeMark } from "../components/icons";
 import { SearchBookModal, type MergedEntry } from "../components/BookModal";
+import { progressLabel } from "../lib/format";
 
 /** Mirror of norm.Key's text rules — enough agreement to merge catalog hits. */
 function normText(s: string): string {
@@ -71,31 +72,82 @@ function Cover(props: { src?: string; alt: string }) {
   );
 }
 
+interface StreamPayload {
+  query: string;
+  search_id: string;
+  group?: SearchGroup;
+  groups?: SearchGroup[];
+}
+
 export function SearchPage() {
   const toastCtx = useToast();
   const [query, setQuery] = useState("");
   const [merged, setMerged] = useState<MergedEntry[] | null>(null);
-  const [groupStates, setGroupStates] = useState<SearchGroup[] | null>(null);
+  const [groups, setGroups] = useState<SearchGroup[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [defaultSource, setDefaultSource] = useState<string>("");
   const [selected, setSelected] = useState<MergedEntry | null>(null);
+  const [tasks, setTasks] = useState<QueueTask[]>([]);
+
+  // refs mirror the search session so event handlers see current values
+  // without re-subscribing
+  const queryRef = useRef("");
+  const searchSeq = useRef(0);
+  const activeSearchId = useRef<string | null>(null);
+  const groupsRef = useRef<SearchGroup[]>([]);
 
   useEffect(() => {
     backend.getSettings().then((s) => setDefaultSource(s?.default_source ?? "")).catch(() => {});
   }, []);
 
+  // results stream in per source; the blocking searchAll resolve is the
+  // final, authoritative reconcile (and the only path on cache hits)
+  useEffect(() => {
+    const offStart = onEvent("search:start", (p: StreamPayload) => {
+      if (!p?.groups || p.query !== queryRef.current) return;
+      activeSearchId.current = p.search_id;
+      groupsRef.current = p.groups;
+      setGroups(p.groups);
+    });
+    const offGroup = onEvent("search:group", (p: StreamPayload) => {
+      if (!p?.group || p.search_id !== activeSearchId.current) return;
+      const next = [...groupsRef.current];
+      const i = next.findIndex((g) => g.source_id === p.group!.source_id);
+      if (i >= 0) next[i] = p.group!;
+      else next.push(p.group!);
+      groupsRef.current = next;
+      setGroups(next);
+      setMerged(mergeGroups(next));
+    });
+    return () => { offStart(); offGroup(); };
+  }, []);
+
+  // download state, for the on-card progress/shelved chips
+  useEffect(() => {
+    backend.getQueue().then((t) => setTasks(t ?? [])).catch(() => {});
+    return onEvent("queue:changed", (t) => setTasks(Array.isArray(t) ? t : []));
+  }, []);
+
   const search = async () => {
     const q = query.trim();
-    if (!q) return;
+    if (!q || busy) return;
+    const seq = ++searchSeq.current;
+    queryRef.current = q;
+    activeSearchId.current = null;
     setBusy(true);
     try {
       const res = (await backend.searchAll(q)) ?? [];
-      setGroupStates(res);
+      if (searchSeq.current !== seq) return; // a newer search took over
+      activeSearchId.current = null;
+      groupsRef.current = res;
+      setGroups(res);
       setMerged(mergeGroups(res));
     } catch (e: any) {
-      toastCtx.push("error", `Search failed: ${e?.message ?? e}`);
+      if (searchSeq.current === seq) {
+        toastCtx.push("error", `Search failed: ${e?.message ?? e}`);
+      }
     } finally {
-      setBusy(false);
+      if (searchSeq.current === seq) setBusy(false);
     }
   };
 
@@ -116,6 +168,15 @@ export function SearchPage() {
   const quickDownload = async (entry: MergedEntry) => {
     const r = pickDefault(entry.results, defaultSource);
     if (r) await download(r, "EPUB");
+  };
+
+  // the queue task tracking this entry's download, if any
+  const taskFor = (entry: MergedEntry): QueueTask | undefined => {
+    for (const r of entry.results) {
+      const t = tasks.find((x) => x.source_id === r.source_id && x.result_id && x.result_id === r.id);
+      if (t) return t;
+    }
+    return undefined;
   };
 
   const stateWord = (state: string, message?: string) =>
@@ -148,7 +209,7 @@ export function SearchPage() {
         </button>
       </div>
 
-      {merged === null && (
+      {!busy && merged === null && groups === null && (
         <div className="empty">
           <div className="big"><ManiculeMark size={46} /></div>
           <div className="empty-title">Point at something worth reading.</div>
@@ -157,53 +218,62 @@ export function SearchPage() {
         </div>
       )}
 
-      {merged !== null && merged.length === 0 && (
+      {!busy && merged !== null && merged.length === 0 && (
         <div className="empty">No enabled source returned anything. Check the strip below or add sources in Settings.</div>
       )}
 
+      {groups !== null && groups.length > 0 && (
+        <div className="source-strip">
+          {groups.map((g) => (
+            <span className={`pill ${g.state}`} key={g.source_id} title={g.message}>
+              {g.source_name}: {g.state === "ok" ? `${g.results.length}` : stateWord(g.state, g.message)}
+            </span>
+          ))}
+        </div>
+      )}
+
       {merged !== null && merged.length > 0 && (
-        <>
-          {groupStates && groupStates.length > 0 && (
-            <div className="source-strip">
-              {groupStates.map((g) => (
-                <span className={`pill ${g.state}`} key={g.source_id} title={g.message}>
-                  {g.source_name}: {g.state === "ok" ? `${g.results.length}` : stateWord(g.state, g.message)}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="cover-grid">
-            {merged.map((e) => {
-              const quick = pickDefault(e.results, defaultSource);
-              return (
-                <div
-                  className="cover-card clickable"
-                  key={e.key}
-                  onClick={() => setSelected(e)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(ev) => ev.key === "Enter" && setSelected(e)}
-                >
-                  <Cover src={e.coverUrl} alt={e.title} />
-                  <div className="cover-title">{e.title}</div>
-                  <div className="cover-author">{e.authors.join(", ")}</div>
-                  <div className="card-actions">
-                    {quick && quick.formats.some((f) => f.name.toUpperCase() === "EPUB") && (
-                      <button
-                        className="small fmt primary-quick"
-                        title={`Quick-download EPUB from ${quick.source_name} — open the card to choose another`}
-                        onClick={(ev) => { ev.stopPropagation(); void quickDownload(e); }}
-                      >
-                        +EPUB
-                      </button>
-                    )}
-                    {e.results.length > 1 && <span className="pill">{e.results.length} sources</span>}
-                  </div>
+        <div className="cover-grid">
+          {merged.map((e) => {
+            const quick = pickDefault(e.results, defaultSource);
+            const task = taskFor(e);
+            const inFlight = task && (task.state === "queued" || task.state === "running");
+            const shelved = task && (task.state === "done" || task.state === "duplicate");
+            return (
+              <div
+                className="cover-card clickable"
+                key={e.key}
+                onClick={() => setSelected(e)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(ev) => ev.key === "Enter" && setSelected(e)}
+              >
+                <Cover src={e.coverUrl} alt={e.title} />
+                <div className="cover-title">{e.title}</div>
+                <div className="cover-author">{e.authors.join(", ")}</div>
+                <div className="card-actions">
+                  {task && task.state === "done" && <span className="pill ok">✓ shelved</span>}
+                  {task && task.state === "duplicate" && <span className="pill">already owned</span>}
+                  {inFlight && (
+                    <span className={`pill dl ${task.state === "queued" ? "dim" : ""}`}>
+                      {task.state === "queued" ? "queued…" : `↓ ${progressLabel(task.bytes_done, task.bytes_total)}`}
+                    </span>
+                  )}
+                  {!task && quick && quick.formats.some((f) => f.name.toUpperCase() === "EPUB") && (
+                    <button
+                      className="small fmt primary-quick"
+                      title={`Quick-download EPUB from ${quick.source_name} — open the card to choose another`}
+                      onClick={(ev) => { ev.stopPropagation(); void quickDownload(e); }}
+                    >
+                      +EPUB
+                    </button>
+                  )}
+                  {!inFlight && !shelved && e.results.length > 1 && <span className="pill">{e.results.length} sources</span>}
                 </div>
-              );
-            })}
-          </div>
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {selected && (

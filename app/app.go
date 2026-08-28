@@ -57,18 +57,22 @@ type ServerStatus struct {
 type Manicule struct {
 	mu sync.RWMutex
 
-	cfg       *config.Manager
-	settings  *config.Settings
-	fleet     *fleet.Fleet
-	registry  *sources.Registry
+	cfg           *config.Manager
+	settings      *config.Settings
+	fleet         *fleet.Fleet
+	registry      *sources.Registry
 	coverEnricher func(ctx context.Context, title string, authors []string) ([]byte, string, error)
-	store     *library.Store
-	downloads *download.Manager
-	opdsSrv   *opds.Server
+	store         *library.Store
+	downloads     *download.Manager
+	opdsSrv       *opds.Server
 
 	watchCancel context.CancelFunc
 	ctx         context.Context
 	tray        *application.SystemTray
+
+	searchCancel context.CancelFunc      // in-flight SearchAll, superseded by newer queries
+	searchID     string                  // owner of searchCancel; "" when idle
+	searchCache  map[string]cachedSearch // query → results, short TTL
 }
 
 func New() *Manicule {
@@ -100,6 +104,7 @@ func (m *Manicule) ServiceStartup(ctx context.Context, _ application.ServiceOpti
 	fl.RunBackgroundRefresh()
 
 	m.registry = sources.NewRegistry(sources.NewHTTPClient())
+	m.searchCache = map[string]cachedSearch{}
 	m.syncSources()
 
 	// Wire OL cover enrichment for the ingest pipeline.
@@ -142,6 +147,7 @@ func (m *Manicule) emit(name string, data any) {
 }
 
 func (m *Manicule) syncSources() {
+	m.flushSearchCache() // enabled sources / credentials may have changed
 	for _, src := range m.registry.All() {
 		id := src.ID()
 		enabled := m.settings.SourcesEnabled[id]
@@ -171,18 +177,98 @@ func credentialsFor(s *config.Settings, id string) sources.Credentials {
 // offer no downloads, so they never appear as search result providers.
 var metadataOnly = map[string]bool{"openlibrary": true}
 
+const searchCacheTTL = 2 * time.Minute
+
+type cachedSearch struct {
+	groups []SearchGroup
+	saved  time.Time
+}
+
 // SearchAll fans out to every enabled source in parallel and groups results
 // by source — no fake unified ranking (§2). Own-library hits come through
 // ListLibrary from the same UI bar.
+//
+// Results stream to the frontend: a search:start event carries the per-source
+// skeletons the moment the fan-out begins, and each source emits search:group
+// as it finishes, so the UI paints the fastest catalog long before the slowest
+// one returns. The blocking return value stays the final, complete answer
+// (and serves repeat queries from a short-lived cache).
 func (m *Manicule) SearchAll(query string) []SearchGroup {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return nil
 	}
-	var wg sync.WaitGroup
-	groups := make([]SearchGroup, 0)
-	var mu sync.Mutex
 
+	if groups, ok := m.cachedSearch(q); ok {
+		return groups
+	}
+
+	// a newer query supersedes any in-flight run
+	if m.searchCancel != nil {
+		m.searchCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	searchID := m.claimSearch(cancel)
+
+	groups := m.searchSkeleton()
+	// emit a copy: workers start mutating `groups` right away, and the event
+	// payload may be marshaled after those writes begin
+	skeleton := make([]SearchGroup, len(groups))
+	copy(skeleton, groups)
+	m.emit("search:start", map[string]any{"query": q, "search_id": searchID, "groups": skeleton})
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for i := range groups {
+		g := groups[i]
+		if g.State != "searching" {
+			continue
+		}
+		src, ok := m.registry.Get(g.SourceID)
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		go func(src sources.Source, idx int) {
+			defer wg.Done()
+			sctx, scancel := context.WithTimeout(ctx, 20*time.Second)
+			defer scancel()
+			start := time.Now()
+			res, err := src.Search(sctx, q, 24)
+			elapsed := time.Since(start)
+
+			mu.Lock()
+			defer mu.Unlock()
+			g := groups[idx]
+			if err != nil {
+				slog.Warn("search source failed", "source", src.ID(), "elapsed", elapsed.String(), "err", err)
+				if errors.Is(err, sources.ErrNeedsAuth) {
+					g.State = "needs-auth"
+				} else {
+					g.State = "error"
+					g.Message = err.Error()
+				}
+			} else {
+				slog.Info("search source ok", "source", src.ID(), "elapsed", elapsed.String(), "results", len(res))
+				g.State = "ok"
+				g.Results = res
+			}
+			groups[idx] = g
+			if ctx.Err() == nil {
+				m.emit("search:group", map[string]any{"query": q, "search_id": searchID, "group": g})
+			}
+		}(src, i)
+	}
+	wg.Wait()
+
+	m.releaseSearch(searchID)
+	m.cacheSearch(q, groups)
+	return groups
+}
+
+// searchSkeleton builds the initial per-source group list in stable order.
+func (m *Manicule) searchSkeleton() []SearchGroup {
+	groups := make([]SearchGroup, 0)
 	for _, src := range m.registry.All() {
 		if metadataOnly[src.ID()] {
 			continue
@@ -194,43 +280,57 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 		} else if src.NeedsAuth() {
 			g.State = "needs-auth"
 		}
-		idx := len(groups)
-		mu.Lock()
 		groups = append(groups, g)
-		mu.Unlock()
-
-		if g.State != "searching" {
-			continue
-		}
-		wg.Add(1)
-		go func(src sources.Source, idx int) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			start := time.Now()
-			res, err := src.Search(ctx, q, 24)
-			elapsed := time.Since(start)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				slog.Warn("search source failed", "source", src.ID(), "elapsed", elapsed.String(), "err", err)
-				if errors.Is(err, sources.ErrNeedsAuth) {
-					groups[idx].State = "needs-auth"
-				} else {
-					groups[idx].State = "error"
-					groups[idx].Message = err.Error()
-				}
-				return
-			}
-			slog.Info("search source ok", "source", src.ID(), "elapsed", elapsed.String(), "results", len(res))
-			groups[idx].State = "ok"
-			groups[idx].Results = res
-		}(src, idx)
 	}
-	wg.Wait()
-
-	// stable order: tier then original order
 	return groups
+}
+
+func (m *Manicule) claimSearch(cancel context.CancelFunc) string {
+	id := fmt.Sprintf("s%d", time.Now().UnixNano())
+	m.mu.Lock()
+	if m.searchCancel != nil {
+		m.searchCancel() // belt-and-braces: nothing should be in flight here
+	}
+	m.searchCancel = cancel
+	m.searchID = id
+	m.mu.Unlock()
+	return id
+}
+
+// releaseSearch clears the cancel hook only if this run still owns it (a
+// superseding SearchAll may have claimed it already).
+func (m *Manicule) releaseSearch(id string) {
+	m.mu.Lock()
+	if m.searchID == id {
+		m.searchCancel = nil
+		m.searchID = ""
+	}
+	m.mu.Unlock()
+}
+
+func (m *Manicule) cachedSearch(q string) ([]SearchGroup, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.searchCache[q]
+	if !ok || time.Since(c.saved) > searchCacheTTL {
+		return nil, false
+	}
+	return c.groups, true
+}
+
+func (m *Manicule) cacheSearch(q string, groups []SearchGroup) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.searchCache) > 32 {
+		m.searchCache = map[string]cachedSearch{}
+	}
+	m.searchCache[q] = cachedSearch{groups: groups, saved: time.Now()}
+}
+
+func (m *Manicule) flushSearchCache() {
+	m.mu.Lock()
+	m.searchCache = map[string]cachedSearch{}
+	m.mu.Unlock()
 }
 
 func (m *Manicule) SourceStatuses() []map[string]any {

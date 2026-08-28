@@ -118,14 +118,14 @@ func (g *gutendex) Search(ctx context.Context, query string, limit int) ([]Resul
 
 // Download streams the file. Gutenberg geo-blocks Germany; fleet download-host
 // failover rewrites www.gutenberg.org URLs to aleph.gutenberg.org pub paths.
-func (g *gutendex) Download(ctx context.Context, f Format, w io.Writer) error {
+func (g *gutendex) Download(ctx context.Context, f Format, w io.Writer, onProgress ProgressFunc) error {
 	candidates := []string{f.URL}
 	if alt := alephMirror(f.URL); alt != "" {
 		candidates = append(candidates, alt)
 	}
 	var lastErr error
 	for _, c := range candidates {
-		err := streamTo(ctx, g.client, c, nil, w)
+		err := streamTo(ctx, g.client, c, nil, w, onProgress)
 		if err == nil {
 			return nil
 		}
@@ -198,7 +198,7 @@ func canonicalAuthorName(name string) string {
 	return name
 }
 
-func streamTo(ctx context.Context, client *http.Client, url string, creds *Credentials, w io.Writer) error {
+func streamTo(ctx context.Context, client *http.Client, url string, creds *Credentials, w io.Writer, onProgress ProgressFunc) error {
 	resp, err := httpGet(ctx, client, url, creds)
 	if err != nil {
 		return err
@@ -207,6 +207,5 @@ func streamTo(ctx context.Context, client *http.Client, url string, creds *Crede
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
 	}
-	_, err = io.Copy(w, resp.Body)
-	return err
+	return CopyWithProgress(w, resp.Body, resp.ContentLength, onProgress)
 }

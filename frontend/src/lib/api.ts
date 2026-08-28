@@ -36,6 +36,7 @@ export interface SearchGroup {
 export interface QueueTask {
   id: string;
   source_id: string;
+  result_id?: string;
   title: string;
   authors: string[];
   cover_url?: string;
@@ -43,6 +44,8 @@ export interface QueueTask {
   state: "queued" | "running" | "done" | "failed" | "duplicate";
   error?: string;
   book_id?: number;
+  bytes_done: number;
+  bytes_total: number; // 0 = unknown
   added_at: string;
 }
 
@@ -246,9 +249,9 @@ function devPreview(): typeof wailsBackend | null {
       ]),
     getQueue: () =>
       Promise.resolve([
-        { id: "t1", source_id: "gutendex", title: shelf[0].title, authors: ["Oscar Wilde"], format_name: "EPUB", state: "done", book_id: 1, added_at: new Date().toISOString() },
-        { id: "t2", source_id: "gutendex", title: "The Time Machine", authors: ["H. G. Wells"], format_name: "EPUB", state: "running", added_at: new Date().toISOString() },
-        { id: "t3", source_id: "gutendex", title: "Dubliners", authors: ["James Joyce"], format_name: "EPUB", state: "failed", error: "mirror timed out", added_at: new Date().toISOString() },
+        { id: "t1", source_id: "gutendex", title: shelf[0].title, authors: ["Oscar Wilde"], format_name: "EPUB", state: "done", book_id: 1, bytes_done: 412000, bytes_total: 412000, added_at: new Date().toISOString() },
+        { id: "t2", source_id: "gutendex", title: "The Time Machine", authors: ["H. G. Wells"], format_name: "EPUB", state: "running", bytes_done: 190000, bytes_total: 320000, added_at: new Date().toISOString() },
+        { id: "t3", source_id: "gutendex", title: "Dubliners", authors: ["James Joyce"], format_name: "EPUB", state: "failed", error: "mirror timed out", bytes_done: 0, bytes_total: 0, added_at: new Date().toISOString() },
       ]),
     listLibrary: () =>
       Promise.resolve(

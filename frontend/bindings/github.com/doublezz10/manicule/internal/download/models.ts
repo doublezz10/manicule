@@ -21,6 +21,11 @@ export enum State {
 export class Task {
     "id": string;
     "source_id": string;
+
+    /**
+     * source-specific book id, for UI correlation
+     */
+    "result_id"?: string;
     "title": string;
     "authors": string[];
     "cover_url"?: string;
@@ -28,6 +33,12 @@ export class Task {
     "state": State;
     "error"?: string;
     "book_id"?: number;
+    "bytes_done": number;
+
+    /**
+     * 0 = unknown
+     */
+    "bytes_total": number;
     "added_at": string;
 
     /** Creates a new Task instance. */
@@ -50,6 +61,12 @@ export class Task {
         if (!("state" in $$source)) {
             this["state"] = State.$zero;
         }
+        if (!("bytes_done" in $$source)) {
+            this["bytes_done"] = 0;
+        }
+        if (!("bytes_total" in $$source)) {
+            this["bytes_total"] = 0;
+        }
         if (!("added_at" in $$source)) {
             this["added_at"] = "0001-01-01T00:00:00.000Z";
         }
@@ -61,10 +78,10 @@ export class Task {
      * Creates a new Task instance from a string or object.
      */
     static createFrom($$source: any = {}): Task {
-        const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("authors" in $$parsedSource) {
-            $$parsedSource["authors"] = $$createField3_0($$parsedSource["authors"]);
+            $$parsedSource["authors"] = $$createField4_0($$parsedSource["authors"]);
         }
         return new Task($$parsedSource as Partial<Task>);
     }
