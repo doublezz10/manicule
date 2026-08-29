@@ -101,6 +101,10 @@ export function SettingsPage() {
             <option value="decade-author-title">Decade / Author / Title</option>
           </select>
         </div>
+        <div className="setting-row">
+          <label>Auto-send to reader<span className="hint">When the reader is in File Transfer mode, finished downloads hop onto it over Wi-Fi</span></label>
+          <Toggle on={s.auto_send_device} onChange={(v) => save({ auto_send_device: v })} />
+        </div>
       </div>
 
       <div className="settings-section">

@@ -70,6 +70,8 @@ type Manager struct {
 	resolveSource func(id string) (sources.Source, bool)
 	// probeHook re-probes a source's fleet endpoints after a failure.
 	probeHook func(ctx context.Context, sourceID string)
+	// doneHook fires after a task lands in the library (auto-send to device).
+	doneHook func(t *Task)
 }
 
 func New(store *library.Store, cleanOn bool, imageWidth int, concurrency int, notify Notifier,
@@ -97,6 +99,13 @@ func (m *Manager) SetCleaning(on bool, imageWidth int) {
 // SetCoverEnricher wires the OL cover enrichment hook into the ingest pipeline.
 func (m *Manager) SetCoverEnricher(fn func(ctx context.Context, title string, authors []string) ([]byte, string, error)) {
 	m.coverEnricher = fn
+}
+
+// SetDoneHook registers a callback fired once per successfully imported task.
+func (m *Manager) SetDoneHook(fn func(t *Task)) {
+	m.mu.Lock()
+	m.doneHook = fn
+	m.mu.Unlock()
 }
 
 // SetFilingMode updates the disk filing mode for new imports.
@@ -200,6 +209,13 @@ func (m *Manager) run(t *Task) {
 		t.BookID = book.Book.ID
 	})
 	m.emit("library:changed", nil)
+
+	m.mu.Lock()
+	hook := m.doneHook
+	m.mu.Unlock()
+	if hook != nil {
+		hook(t)
+	}
 }
 
 // setProgress records byte counts on a task; it returns true when the caller

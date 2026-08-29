@@ -80,6 +80,12 @@ export class Settings {
      * sources carry the same book. Empty = auto (first source with EPUB).
      */
     "default_source"?: string;
+
+    /**
+     * AutoSendDevice pushes a finished download to a connected CrossPoint
+     * reader over Wi-Fi without asking.
+     */
+    "auto_send_device": boolean;
     "wizard_done": boolean;
 
     /** Creates a new Settings instance. */
@@ -119,6 +125,9 @@ export class Settings {
         }
         if (!("launch_at_login" in $$source)) {
             this["launch_at_login"] = false;
+        }
+        if (!("auto_send_device" in $$source)) {
+            this["auto_send_device"] = false;
         }
         if (!("wizard_done" in $$source)) {
             this["wizard_done"] = false;

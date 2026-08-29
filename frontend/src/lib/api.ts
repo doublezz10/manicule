@@ -59,6 +59,48 @@ export interface ServerStatus {
   username: string;
 }
 
+export interface DeviceMatch {
+  book_id: number;
+  title: string;
+  author: string;
+  format: string;
+  device_path?: string;
+  device_size?: number;
+  remote_path: string;
+}
+
+export interface DeviceFile {
+  Path: string;
+  Size: number;
+}
+
+export interface DeviceStatus {
+  version: string;
+  ip: string;
+  mode: string; // "STA" (joined wifi) | "AP" (hotspot)
+  rssi: number;
+  freeHeap: number;
+  uptime: number;
+  device: string; // "X3" | "X4"
+}
+
+export interface DeviceState {
+  phase: "searching" | "connected" | "offline";
+  status?: DeviceStatus;
+  on_device: DeviceMatch[];
+  missing: DeviceMatch[];
+  orphan: DeviceFile[];
+  last_error?: string;
+}
+
+export interface DeviceProgress {
+  book_id: number;
+  title: string;
+  done?: number;
+  total?: number;
+  error?: string;
+}
+
 export interface UpdateInfo {
   current: string;
   latest?: string;
@@ -84,6 +126,7 @@ export interface SaveSettingsRequest {
   fleet_override_url?: string;
   filing_mode?: string;
   default_source?: string;
+  auto_send_device?: boolean;
 }
 
 const wailsBackend = {
@@ -116,6 +159,12 @@ const wailsBackend = {
     api.CompleteWizard(libraryPath, launchAtLogin) as Promise<SettingsShape>,
   serverStatus: () => api.ServerStatus() as Promise<ServerStatus>,
   restartServer: () => api.RestartServer(),
+  deviceScan: () => api.DeviceScan() as Promise<DeviceState>,
+  deviceState: () => api.DeviceStateSnapshot() as Promise<DeviceState | null>,
+  syncDevice: () => api.SyncDevice() as Promise<DeviceState>,
+  sendToDevice: (bookId: number) => api.SendToDevice(bookId) as Promise<DeviceState>,
+  removeFromDevice: (paths: string[]) => api.RemoveFromDevice(paths) as Promise<DeviceState>,
+  provisionDeviceOPDS: () => api.ProvisionDeviceOPDS() as Promise<void>,
   regeneratePin: () => api.RegeneratePin() as Promise<SettingsShape>,
   saveProvisioningFile: () => api.SaveProvisioningFile() as Promise<string>,
   provisioningPreview: () => api.GetProvisioningPreview() as Promise<string>,
@@ -139,6 +188,7 @@ export interface SettingsShape {
   launch_at_login: boolean;
   filing_mode: string;
   default_source?: string;
+  auto_send_device: boolean;
   wizard_done: boolean;
 }
 
@@ -196,6 +246,7 @@ function devPreview(): typeof wailsBackend | null {
     launch_at_login: true,
     filing_mode: "author-title",
     default_source: "gutendex",
+    auto_send_device: false,
     wizard_done: true,
   };
 
@@ -247,6 +298,24 @@ function devPreview(): typeof wailsBackend | null {
         { source_id: "gutendex", source_name: "Project Gutenberg", state: "ok", results: shelf.slice(0, 5) },
         { source_id: "standardebooks", source_name: "Standard Ebooks", state: "needs-auth", message: "needs account", results: [] },
       ]),
+    deviceScan: () =>
+      Promise.resolve({
+        phase: "connected",
+        status: { version: "1.0.0", ip: "192.168.1.50", mode: "STA", rssi: -52, freeHeap: 118000, uptime: 640, device: "X3" },
+        on_device: [
+          { book_id: 1, title: shelf[0].title, author: "Oscar Wilde", format: "EPUB", device_path: "/Oscar Wilde/The Picture of Dorian Gray.epub", device_size: 412000, remote_path: "/Oscar Wilde/The Picture of Dorian Gray.epub" },
+        ],
+        missing: [
+          { book_id: 2, title: shelf[1].title, author: "Mary Wollstonecraft Shelley", format: "EPUB", remote_path: "/Mary Wollstonecraft Shelley/Frankenstein; Or, The Modern Prometheus.epub" },
+          { book_id: 4, title: shelf[3].title, author: "Jane Austen", format: "EPUB", remote_path: "/Jane Austen/Pride and Prejudice.epub" },
+        ],
+        orphan: [{ Path: "/To Sort/old-scan.epub", Size: 254000 }],
+      } as DeviceState),
+    deviceState: function () { return this.deviceScan(); },
+    syncDevice: function () { return this.deviceScan(); },
+    sendToDevice: function () { return this.deviceScan(); },
+    removeFromDevice: function () { return this.deviceScan(); },
+    provisionDeviceOPDS: () => Promise.resolve(),
     getQueue: () =>
       Promise.resolve([
         { id: "t1", source_id: "gutendex", title: shelf[0].title, authors: ["Oscar Wilde"], format_name: "EPUB", state: "done", book_id: 1, bytes_done: 412000, bytes_total: 412000, added_at: new Date().toISOString() },

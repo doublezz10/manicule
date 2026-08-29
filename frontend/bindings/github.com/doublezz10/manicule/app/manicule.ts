@@ -74,21 +74,41 @@ export function DeleteBook(id: number): $CancellablePromise<void> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.DeleteBook", id);
 }
 
+/**
+ * DeviceScan refreshes the connection and rebuilds the sync plan from the
+ * library. Safe to call any time; cheap when the watcher already knows the
+ * device is gone.
+ */
+export function DeviceScan(): $CancellablePromise<$models.DeviceState | null> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.DeviceScan").then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
+ * DeviceStateSnapshot returns the last known state without touching the net.
+ */
+export function DeviceStateSnapshot(): $CancellablePromise<$models.DeviceState | null> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.DeviceStateSnapshot").then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
 export function Download(result: sources$0.Result, formatName: string): $CancellablePromise<download$0.Task | null> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.Download", result, formatName).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType7($result);
     });
 }
 
 export function Genres(): $CancellablePromise<string[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.Genres").then(($result: any) => {
-        return $$createType6($result);
+        return $$createType8($result);
     });
 }
 
 export function GetBook(id: number): $CancellablePromise<library$0.BookWithFiles | null> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.GetBook", id).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType10($result);
     });
 }
 
@@ -101,7 +121,7 @@ export function GetProvisioningPreview(): $CancellablePromise<string> {
 
 export function GetQueue(): $CancellablePromise<download$0.Task[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.GetQueue").then(($result: any) => {
-        return $$createType9($result);
+        return $$createType11($result);
     });
 }
 
@@ -117,13 +137,13 @@ export function ImportFiles(): $CancellablePromise<void> {
 
 export function ListByGenre(genre: string, sort: string, page: number): $CancellablePromise<library$0.BookWithFiles[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.ListByGenre", genre, sort, page).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType12($result);
     });
 }
 
 export function ListLibrary(query: string, sort: string, page: number): $CancellablePromise<library$0.BookWithFiles[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.ListLibrary", query, sort, page).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType12($result);
     });
 }
 
@@ -153,11 +173,28 @@ export function ProbeFileSize(rawURL: string): $CancellablePromise<number> {
 }
 
 /**
+ * ProvisionDeviceOPDS writes manicule's catalog into the reader's saved OPDS
+ * server list over Wi-Fi — the SD-card drop, minus the SD card.
+ */
+export function ProvisionDeviceOPDS(): $CancellablePromise<void> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.ProvisionDeviceOPDS");
+}
+
+/**
  * RegeneratePin issues a fresh 4-digit PIN and applies it live.
  */
 export function RegeneratePin(): $CancellablePromise<config$0.Settings | null> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.RegeneratePin").then(($result: any) => {
         return $$createType3($result);
+    });
+}
+
+/**
+ * RemoveFromDevice deletes files from the reader's SD card.
+ */
+export function RemoveFromDevice(paths: string[]): $CancellablePromise<$models.DeviceState | null> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.RemoveFromDevice", paths).then(($result: any) => {
+        return $$createType5($result);
     });
 }
 
@@ -207,19 +244,37 @@ export function SaveSettings(req: $models.SaveSettingsRequest): $CancellableProm
  */
 export function SearchAll(query: string): $CancellablePromise<$models.SearchGroup[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.SearchAll", query).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType14($result);
+    });
+}
+
+/**
+ * SendToDevice pushes one library book to the reader.
+ */
+export function SendToDevice(bookID: number): $CancellablePromise<$models.DeviceState | null> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.SendToDevice", bookID).then(($result: any) => {
+        return $$createType5($result);
     });
 }
 
 export function ServerStatus(): $CancellablePromise<$models.ServerStatus> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.ServerStatus").then(($result: any) => {
-        return $$createType13($result);
+        return $$createType15($result);
     });
 }
 
 export function SourceStatuses(): $CancellablePromise<{ [_ in string]?: any }[]> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.SourceStatuses").then(($result: any) => {
-        return $$createType15($result);
+        return $$createType17($result);
+    });
+}
+
+/**
+ * SyncDevice sends every library book the reader is missing.
+ */
+export function SyncDevice(): $CancellablePromise<$models.DeviceState | null> {
+    return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.SyncDevice").then(($result: any) => {
+        return $$createType5($result);
     });
 }
 
@@ -228,7 +283,7 @@ export function SourceStatuses(): $CancellablePromise<{ [_ in string]?: any }[]>
  */
 export function TrayMenu(): $CancellablePromise<application$0.Menu | null> {
     return $Call.ByName("github.com/doublezz10/manicule/app.Manicule.TrayMenu").then(($result: any) => {
-        return $$createType17($result);
+        return $$createType19($result);
     });
 }
 
@@ -245,17 +300,19 @@ const $$createType0 = $models.UpdateInfo.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = config$0.Settings.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = download$0.Task.createFrom;
+const $$createType4 = $models.DeviceState.createFrom;
 const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = $Create.Array($Create.Any);
-const $$createType7 = library$0.BookWithFiles.createFrom;
-const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = $Create.Array($$createType4);
-const $$createType10 = $Create.Array($$createType7);
-const $$createType11 = $models.SearchGroup.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = $models.ServerStatus.createFrom;
-const $$createType14 = $Create.Map($Create.Any, $Create.Any);
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = application$0.Menu.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
+const $$createType6 = download$0.Task.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = $Create.Array($Create.Any);
+const $$createType9 = library$0.BookWithFiles.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = $Create.Array($$createType6);
+const $$createType12 = $Create.Array($$createType9);
+const $$createType13 = $models.SearchGroup.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = $models.ServerStatus.createFrom;
+const $$createType16 = $Create.Map($Create.Any, $Create.Any);
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = application$0.Menu.createFrom;
+const $$createType19 = $Create.Nullable($$createType18);

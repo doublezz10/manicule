@@ -183,6 +183,7 @@ type SaveSettingsRequest struct {
 	FleetOverrideURL    *string                      `json:"fleet_override_url,omitempty"`
 	FilingMode          *string                      `json:"filing_mode,omitempty"`
 	DefaultSource       *string                      `json:"default_source,omitempty"`
+	AutoSendDevice      *bool                        `json:"auto_send_device,omitempty"`
 }
 
 // SaveSettings applies a partial update and persists it. Heavyweight side
@@ -267,6 +268,9 @@ func (m *Manicule) SaveSettings(req SaveSettingsRequest) (*config.Settings, erro
 		if m.downloads != nil {
 			m.downloads.SetFilingMode(s.FilingMode)
 		}
+	}
+	if req.AutoSendDevice != nil {
+		s.AutoSendDevice = *req.AutoSendDevice
 	}
 
 	if err := m.cfg.Save(s); err != nil {

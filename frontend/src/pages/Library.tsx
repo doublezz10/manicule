@@ -35,10 +35,15 @@ export function LibraryPage() {
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [port, setPort] = useState(8787);
   const [detail, setDetail] = useState<BookT | null>(null);
+  const [onDevice, setOnDevice] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     backend.serverStatus().then((st) => st?.port && setPort(st.port));
     backend.genres?.().then((g) => setGenres(g ?? [])).catch(() => {});
+    // last known sync state — in-memory, never touches the network
+    backend.deviceState().then((d) => {
+      if (d?.phase === "connected") setOnDevice(new Set(d.on_device.map((m) => m.book_id)));
+    }).catch(() => {});
   }, []);
 
   const refresh = async () => {
@@ -59,6 +64,9 @@ export function LibraryPage() {
   useEffect(() => onEvent("library:changed", () => {
     refresh();
     backend.genres?.().then((g) => setGenres(g ?? [])).catch(() => {});
+  }), []);
+  useEffect(() => onEvent("device:changed", (d: any) => {
+    setOnDevice(d?.phase === "connected" ? new Set<number>(d.on_device.map((m: any) => m.book_id)) : new Set());
   }), []);
 
   return (
@@ -135,12 +143,11 @@ export function LibraryPage() {
               <Cover id={b.book.id} hasCover={!!b.book.cover_path} title={b.book.title} port={port} />
               <div className="cover-title">{b.book.title}</div>
               {author && <div className="cover-author">{author}</div>}
-              {(b.book.year || b.book.subjects?.[0]) && (
-                <div className="cover-meta">
-                  {b.book.year ? <span className="pill">{b.book.year}</span> : null}
-                  {b.book.subjects?.[0] ? <span className="pill">{b.book.subjects[0]}</span> : null}
-                </div>
-              )}
+              <div className="cover-meta">
+                {onDevice.has(b.book.id) && <span className="pill ok">on device</span>}
+                {b.book.year ? <span className="pill">{b.book.year}</span> : null}
+                {b.book.subjects?.[0] ? <span className="pill">{b.book.subjects[0]}</span> : null}
+              </div>
             </div>
           );
         })}

@@ -7,7 +7,67 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as device$0 from "../internal/device/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as sources$0 from "../internal/sources/models.js";
+
+/**
+ * DeviceState is the Devices page model: connection phase plus the sync plan.
+ */
+export class DeviceState {
+    /**
+     * "searching" | "connected" | "offline"
+     */
+    "phase": string;
+    "status"?: device$0.Status | null;
+    "on_device": device$0.Match[];
+    "missing": device$0.Match[];
+    "orphan": device$0.DeviceFile[];
+    "last_error"?: string;
+
+    /** Creates a new DeviceState instance. */
+    constructor($$source: Partial<DeviceState> = {}) {
+        if (!("phase" in $$source)) {
+            this["phase"] = "";
+        }
+        if (!("on_device" in $$source)) {
+            this["on_device"] = [];
+        }
+        if (!("missing" in $$source)) {
+            this["missing"] = [];
+        }
+        if (!("orphan" in $$source)) {
+            this["orphan"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeviceState instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeviceState {
+        const $$createField1_0 = $$createType1;
+        const $$createField2_0 = $$createType3;
+        const $$createField3_0 = $$createType3;
+        const $$createField4_0 = $$createType5;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("status" in $$parsedSource) {
+            $$parsedSource["status"] = $$createField1_0($$parsedSource["status"]);
+        }
+        if ("on_device" in $$parsedSource) {
+            $$parsedSource["on_device"] = $$createField2_0($$parsedSource["on_device"]);
+        }
+        if ("missing" in $$parsedSource) {
+            $$parsedSource["missing"] = $$createField3_0($$parsedSource["missing"]);
+        }
+        if ("orphan" in $$parsedSource) {
+            $$parsedSource["orphan"] = $$createField4_0($$parsedSource["orphan"]);
+        }
+        return new DeviceState($$parsedSource as Partial<DeviceState>);
+    }
+}
 
 export class SaveSettingsRequest {
     "library_path"?: string | null;
@@ -27,6 +87,7 @@ export class SaveSettingsRequest {
     "fleet_override_url"?: string | null;
     "filing_mode"?: string | null;
     "default_source"?: string | null;
+    "auto_send_device"?: boolean | null;
 
     /** Creates a new SaveSettingsRequest instance. */
     constructor($$source: Partial<SaveSettingsRequest> = {}) {
@@ -38,8 +99,8 @@ export class SaveSettingsRequest {
      * Creates a new SaveSettingsRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SaveSettingsRequest {
-        const $$createField1_0 = $$createType0;
-        const $$createField3_0 = $$createType2;
+        const $$createField1_0 = $$createType6;
+        const $$createField3_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sources_enabled" in $$parsedSource) {
             $$parsedSource["sources_enabled"] = $$createField1_0($$parsedSource["sources_enabled"]);
@@ -84,7 +145,7 @@ export class SearchGroup {
      * Creates a new SearchGroup instance from a string or object.
      */
     static createFrom($$source: any = {}): SearchGroup {
-        const $$createField4_0 = $$createType4;
+        const $$createField4_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("results" in $$parsedSource) {
             $$parsedSource["results"] = $$createField4_0($$parsedSource["results"]);
@@ -181,8 +242,14 @@ export class UpdateInfo {
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Map($Create.Any, $Create.Any);
-const $$createType1 = $Create.Map($Create.Any, $Create.Any);
-const $$createType2 = $Create.Map($Create.Any, $$createType1);
-const $$createType3 = sources$0.Result.createFrom;
-const $$createType4 = $Create.Array($$createType3);
+const $$createType0 = device$0.Status.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = device$0.Match.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = device$0.DeviceFile.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Map($Create.Any, $Create.Any);
+const $$createType7 = $Create.Map($Create.Any, $Create.Any);
+const $$createType8 = $Create.Map($Create.Any, $$createType7);
+const $$createType9 = sources$0.Result.createFrom;
+const $$createType10 = $Create.Array($$createType9);

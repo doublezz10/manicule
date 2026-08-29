@@ -7,6 +7,7 @@ export {
 };
 
 export {
+    DeviceState,
     SaveSettingsRequest,
     SearchGroup,
     ServerStatus,

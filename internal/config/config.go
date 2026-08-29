@@ -46,6 +46,10 @@ type Settings struct {
 	// sources carry the same book. Empty = auto (first source with EPUB).
 	DefaultSource string `json:"default_source,omitempty"`
 
+	// AutoSendDevice pushes a finished download to a connected CrossPoint
+	// reader over Wi-Fi without asking.
+	AutoSendDevice bool `json:"auto_send_device"`
+
 	WizardDone bool `json:"wizard_done"`
 }
 

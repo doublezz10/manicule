@@ -17,6 +17,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/doublezz10/manicule/internal/config"
+	"github.com/doublezz10/manicule/internal/device"
 	"github.com/doublezz10/manicule/internal/download"
 	"github.com/doublezz10/manicule/internal/fleet"
 	"github.com/doublezz10/manicule/internal/library"
@@ -73,6 +74,12 @@ type Manicule struct {
 	searchCancel context.CancelFunc      // in-flight SearchAll, superseded by newer queries
 	searchID     string                  // owner of searchCancel; "" when idle
 	searchCache  map[string]cachedSearch // query → results, short TTL
+
+	deviceMu          sync.Mutex
+	deviceClient      *device.Client
+	deviceSt          *DeviceState
+	deviceWatchCancel context.CancelFunc
+	sendMu            sync.Mutex // one upload at a time; the firmware allows no more
 }
 
 func New() *Manicule {
@@ -120,10 +127,13 @@ func (m *Manicule) ServiceStartup(ctx context.Context, _ application.ServiceOpti
 			slog.Warn("library open failed at startup", "err", err)
 		}
 	}
+
+	m.startDeviceWatcher()
 	return nil
 }
 
 func (m *Manicule) ServiceShutdown() error {
+	m.stopDeviceWatcher()
 	m.stopWatch()
 	if m.opdsSrv != nil {
 		m.opdsSrv.Stop()
@@ -428,6 +438,7 @@ func (m *Manicule) openLibrary() error {
 	)
 	m.downloads.SetFilingMode(m.settings.FilingMode)
 	m.downloads.SetCoverEnricher(m.coverEnricher)
+	m.downloads.SetDoneHook(m.maybeAutoSend)
 	m.startWatch()
 	// Start the OPDS server if enabled.
 	if m.settings.ServerEnabled {
