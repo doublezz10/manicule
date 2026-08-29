@@ -20,7 +20,7 @@ type Ingestor struct {
 	Store             *Store
 	CleanOnImport     bool
 	ImageMaxWidth     int
-	DeleteSourceAfter bool // watch-folder toggle; manual imports never delete
+	DeleteSourceAfter bool   // watch-folder toggle; manual imports never delete
 	FilingMode        string // "author-title" (default), "genre-author-title", "decade-author-title"
 
 	// CoverEnricher is an optional hook called when a book has no cover after

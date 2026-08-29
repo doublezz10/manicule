@@ -117,7 +117,63 @@ func Open(rootDir string) (*Store, error) {
 	}
 	// Backfill author_sort for rows created before the column existed.
 	backfillAuthorSort(db)
-	return &Store{db: db, rootDir: rootDir}, nil
+	s := &Store{db: db, rootDir: rootDir}
+	s.backfillEpubMeta()
+	return s, nil
+}
+
+// backfillEpubMeta re-reads EPUB metadata for books imported before the
+// namespace-agnostic OPF parser — year/subjects/description were silently
+// empty even when the files carried them. Fill-in only: fields the user or a
+// richer source already populated are left alone.
+func (s *Store) backfillEpubMeta() {
+	rows, err := s.db.Query(`SELECT b.id, f.path FROM books b
+		JOIN files f ON f.book_id = b.id AND f.is_original = 1
+		WHERE b.year = 0 OR b.subjects_json = '' OR b.subjects_json = '[]' OR b.description = ''`)
+	if err != nil {
+		return
+	}
+	type job struct {
+		id   int64
+		path string
+	}
+	var jobs []job
+	for rows.Next() {
+		var j job
+		if rows.Scan(&j.id, &j.path) == nil {
+			jobs = append(jobs, j)
+		}
+	}
+	rows.Close()
+	for _, j := range jobs {
+		_, _, y, subs, d := epubMeta(s.AbsPath(j.path))
+		if y == 0 && len(subs) == 0 && d == "" {
+			continue
+		}
+		var year int
+		var subjectsJSON, description string
+		if s.db.QueryRow(`SELECT year, subjects_json, description FROM books WHERE id = ?`, j.id).
+			Scan(&year, &subjectsJSON, &description) != nil {
+			continue
+		}
+		if year == 0 {
+			year = y
+		}
+		if (subjectsJSON == "" || subjectsJSON == "[]") && len(subs) > 0 {
+			if b, err := json.Marshal(subs); err == nil {
+				subjectsJSON = string(b)
+			}
+		}
+		if description == "" {
+			description = d
+		}
+		decade := ""
+		if year > 0 {
+			decade = fmt.Sprintf("%d0s", year/10*10)
+		}
+		s.db.Exec(`UPDATE books SET year = ?, subjects_json = ?, description = ?, decade = ? WHERE id = ?`,
+			year, subjectsJSON, description, decade, j.id)
+	}
 }
 
 // backfillAuthorSort computes the last-name-first sort key for any book that

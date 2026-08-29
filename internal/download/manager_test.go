@@ -3,6 +3,8 @@ package download
 import (
 	"testing"
 	"time"
+
+	"github.com/doublezz10/manicule/internal/sources"
 )
 
 func TestSetProgressThrottle(t *testing.T) {
@@ -23,5 +25,20 @@ func TestSetProgressThrottle(t *testing.T) {
 	}
 	if tk.BytesDone != 99 || tk.BytesTotal != 100 {
 		t.Fatalf("counters not updated: done=%d total=%d", tk.BytesDone, tk.BytesTotal)
+	}
+}
+
+// Regression: New must wire the resolve hook — a nil one panics the whole
+// app on the first real download (found live, 2026-08-29).
+func TestNewWiresCallbacks(t *testing.T) {
+	called := false
+	m := New(nil, false, 0, 1, nil,
+		func(id string) (sources.Source, bool) { called = true; return nil, false }, nil)
+	if m.resolveSource == nil {
+		t.Fatal("resolveSource not wired — Enqueue would panic on first download")
+	}
+	m.resolveSource("x")
+	if !called {
+		t.Fatal("resolveSource field points elsewhere")
 	}
 }

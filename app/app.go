@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -256,7 +257,7 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 					g.State = "needs-auth"
 				} else {
 					g.State = "error"
-					g.Message = err.Error()
+					g.Message = friendlySearchErr(err)
 				}
 			} else {
 				slog.Info("search source ok", "source", src.ID(), "elapsed", elapsed.String(), "results", len(res))
@@ -272,8 +273,33 @@ func (m *Manicule) SearchAll(query string) []SearchGroup {
 	wg.Wait()
 
 	m.releaseSearch(searchID)
-	m.cacheSearch(q, groups)
+
+	// cache only when something actually answered — retrying a failed search
+	// must hit the network again, not the cache
+	for _, g := range groups {
+		if g.State == "ok" {
+			m.cacheSearch(q, groups)
+			break
+		}
+	}
 	return groups
+}
+
+// friendlySearchErr turns transport noise into something a reader can act on;
+// the raw error stays in the log.
+func friendlySearchErr(err error) string {
+	var nerr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.As(err, &nerr) && nerr.Timeout() {
+		return "timed out — check your connection"
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "no such host") || strings.Contains(msg, "connection refused") {
+		return "can't reach the catalog — check your connection"
+	}
+	if strings.Contains(msg, "EOF") || strings.Contains(msg, "reset by peer") {
+		return "connection dropped — try again"
+	}
+	return msg
 }
 
 // searchSkeleton builds the initial per-source group list in stable order.

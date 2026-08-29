@@ -80,12 +80,14 @@ func New(store *library.Store, cleanOn bool, imageWidth int, concurrency int, no
 		concurrency = 2
 	}
 	return &Manager{
-		sem:        make(chan struct{}, concurrency),
-		cancel:     map[string]context.CancelFunc{},
-		store:      store,
-		cleanOn:    cleanOn,
-		imageWidth: imageWidth,
-		notify:     notify,
+		sem:           make(chan struct{}, concurrency),
+		cancel:        map[string]context.CancelFunc{},
+		store:         store,
+		cleanOn:       cleanOn,
+		imageWidth:    imageWidth,
+		notify:        notify,
+		resolveSource: resolveSource,
+		probeHook:     probeHook,
 	}
 }
 
@@ -149,6 +151,17 @@ func (m *Manager) Enqueue(r sources.Result, format sources.Format) *Task {
 func (m *Manager) run(t *Task) {
 	m.sem <- struct{}{}
 	defer func() { <-m.sem }()
+
+	// a task failure must never take the app down
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("download task panicked", "task", t.ID, "title", t.Title, "panic", r)
+			m.update(t, func() {
+				t.State = StateFailed
+				t.Error = fmt.Sprintf("internal error: %v", r)
+			})
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.mu.Lock()
