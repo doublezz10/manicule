@@ -88,7 +88,8 @@ func (m *Manicule) tryConnect() bool {
 	}
 	m.deviceMu.Lock()
 	m.deviceClient = c
-	m.deviceSt = &DeviceState{Phase: "connected", Status: st}
+	m.deviceSt = deviceState("connected")
+	m.deviceSt.Status = st
 	m.deviceMu.Unlock()
 	return true
 }
@@ -97,12 +98,24 @@ func (m *Manicule) tryConnect() bool {
 func (m *Manicule) dropDevice(lastErr string) {
 	m.deviceMu.Lock()
 	m.deviceClient = nil
-	if m.deviceSt == nil || m.deviceSt.Phase != "connected" {
-		m.deviceSt = &DeviceState{Phase: "offline", LastError: lastErr}
-	} else {
-		m.deviceSt = &DeviceState{Phase: "offline", Status: m.deviceSt.Status, LastError: lastErr}
+	prev := m.deviceSt
+	m.deviceSt = deviceState("offline")
+	if prev != nil {
+		m.deviceSt.Status = prev.Status // keep last-known device info
 	}
+	m.deviceSt.LastError = lastErr
 	m.deviceMu.Unlock()
+}
+
+// deviceState builds a state with non-nil lists — nil slices would marshal
+// as JSON null and crash the frontend render.
+func deviceState(phase string) *DeviceState {
+	return &DeviceState{
+		Phase:    phase,
+		OnDevice: []device.Match{},
+		Missing:  []device.Match{},
+		Orphan:   []device.DeviceFile{},
+	}
 }
 
 // DeviceStateSnapshot returns the last known state without touching the net.
@@ -110,7 +123,7 @@ func (m *Manicule) DeviceStateSnapshot() *DeviceState {
 	m.deviceMu.Lock()
 	defer m.deviceMu.Unlock()
 	if m.deviceSt == nil {
-		return &DeviceState{Phase: "searching"}
+		return deviceState("searching")
 	}
 	return m.deviceSt
 }
@@ -122,7 +135,9 @@ func (m *Manicule) DeviceStateSnapshot() *DeviceState {
 // device is gone.
 func (m *Manicule) DeviceScan() *DeviceState {
 	if m.store == nil {
-		return &DeviceState{Phase: "offline", LastError: "no library configured"}
+		st := deviceState("offline")
+		st.LastError = "no library configured"
+		return st
 	}
 	if m.connected() == nil {
 		m.tryConnect()
@@ -208,7 +223,7 @@ func (m *Manicule) connected() *device.Client {
 func (m *Manicule) buildDeviceState() *DeviceState {
 	c := m.connected()
 	if c == nil {
-		return &DeviceState{Phase: "offline"}
+		return deviceState("offline")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -218,14 +233,24 @@ func (m *Manicule) buildDeviceState() *DeviceState {
 		m.deviceMu.Lock()
 		m.deviceClient = nil
 		m.deviceMu.Unlock()
-		return &DeviceState{Phase: "offline", LastError: err.Error()}
+		st := deviceState("offline")
+		st.LastError = err.Error()
+		return st
 	}
 	files, err := device.WalkBooks(ctx, c)
 	if err != nil {
-		return &DeviceState{Phase: "connected", Status: st, LastError: "scan failed: " + err.Error()}
+		out := deviceState("connected")
+		out.Status = st
+		out.LastError = "scan failed: " + err.Error()
+		return out
 	}
 	plan := device.PlanBooks(m.deviceLibBooks(), files)
-	return &DeviceState{Phase: "connected", Status: st, OnDevice: plan.OnDevice, Missing: plan.Missing, Orphan: plan.Orphan}
+	out := deviceState("connected")
+	out.Status = st
+	out.OnDevice = plan.OnDevice
+	out.Missing = plan.Missing
+	out.Orphan = plan.Orphan
+	return out
 }
 
 // deviceLibBooks maps the store onto the planner's input, choosing the file

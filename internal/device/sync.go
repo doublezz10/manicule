@@ -94,17 +94,43 @@ func WalkBooks(ctx context.Context, c *Client) ([]DeviceFile, error) {
 	return out, nil
 }
 
-// splitDevicePath breaks "/Author/Title.ext" into its normalized match key
-// (author empty for files sitting in the card root).
+// splitDevicePath breaks "/Author/Title.ext" into its match parts. Calibre
+// save templates embed the author in the filename ("Title - Author.ext") and
+// write "Last, First" author folders — both get normalized, and the
+// filename's author (when present) is trusted over the folder's, since
+// plugin folders can be mangled ("K., Dick, Philip").
 func splitDevicePath(p string) (title, author string) {
 	dir, base := path.Split(strings.TrimPrefix(p, "/"))
-	return strings.TrimSuffix(base, path.Ext(base)), strings.Trim(dir, "/")
+	base = strings.TrimSuffix(base, path.Ext(base))
+	author = flipAuthor(strings.Trim(dir, "/"))
+	if i := strings.LastIndex(base, " - "); i > 0 {
+		author = flipAuthor(strings.TrimSpace(base[i+3:]))
+		base = strings.TrimSpace(base[:i])
+	}
+	return base, author
+}
+
+// flipAuthor converts Calibre's "Last, First" author folders — which the
+// official plugin writes to the card — into "First Last", matching how the
+// library stores author names.
+func flipAuthor(a string) string {
+	if i := strings.IndexByte(a, ','); i > 0 {
+		last := strings.TrimSpace(a[:i])
+		rest := strings.TrimSpace(a[i+1:])
+		if rest != "" {
+			return rest + " " + last
+		}
+		return last
+	}
+	return a
 }
 
 // PlanBooks compares the library against the device's files. Matching runs in
-// two passes — normalized author+title (the /Author/Title.ext convention),
-// then title-only for files loose in the card root — so anything manicule
-// itself pushed always matches, and each device file counts at most once.
+// three passes — normalized author+title (with Calibre "Last, First" folders
+// flipped), then title-only for files loose in the card root, then
+// unique-title rescue for books whose device folder is mangled — so anything
+// manicule or Calibre pushed always matches, and each device file counts at
+// most once.
 func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 	byTitle := map[string][]int{} // norm(title) → books indexes, for the flat pass
 	for i, b := range books {
@@ -127,7 +153,7 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 			}
 			title, author := splitDevicePath(f.Path)
 			if f.Path == wantPath ||
-				(author != "" && wantKey == norm.Text(title)+"|"+norm.Text(author)) {
+				(author != "" && wantKey == norm.Text(title)+"|"+norm.Text(flipAuthor(author))) {
 				fileOf[i], usedFile[j] = j, true
 				break
 			}
@@ -151,7 +177,32 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 		}
 	}
 
-	var plan Plan
+	// pass 3: a still-missing book claims an orphan file with the exact same
+	// title — but only when that title is unambiguous on the card, so
+	// same-title-different-author pairs stay unmatched rather than wrong
+	for i, b := range books {
+		if fileOf[i] != -1 {
+			continue
+		}
+		want := norm.Text(b.Title)
+		if want == "" {
+			continue
+		}
+		cand, hits := -1, 0
+		for j, f := range files {
+			if usedFile[j] {
+				continue
+			}
+			if title, _ := splitDevicePath(f.Path); norm.Text(title) == want {
+				cand, hits = j, hits+1
+			}
+		}
+		if hits == 1 {
+			fileOf[i], usedFile[cand] = cand, true
+		}
+	}
+
+	var plan = Plan{OnDevice: []Match{}, Missing: []Match{}, Orphan: []DeviceFile{}}
 	for i, b := range books {
 		m := Match{
 			BookID: b.ID, Title: b.Title, Author: b.Author, Format: b.Format,

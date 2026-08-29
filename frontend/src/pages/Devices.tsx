@@ -64,7 +64,7 @@ export function DevicesPage() {
   }, [server?.running, server?.lan_url]);
 
   const connected = st?.phase === "connected";
-  const sendCount = st?.missing.length ?? 0;
+  const sendCount = st?.missing?.length ?? 0;
 
   const syncAll = async () => {
     setBusy(true);
@@ -197,10 +197,10 @@ export function DevicesPage() {
 
       {connected && (
         <>
-          {st!.missing.length > 0 && (
+          {(st!.missing?.length ?? 0) > 0 && (
             <>
               <h2>Ready to send</h2>
-              {st!.missing.map((mi) => (
+              {(st!.missing ?? []).map((mi) => (
                 <div className="queue-row" key={`m-${mi.book_id}`}>
                   <span className="state-chip queued">in library</span>
                   <div style={{ flex: 1 }}>
@@ -222,10 +222,10 @@ export function DevicesPage() {
             </>
           )}
 
-          {st!.on_device.length > 0 && (
+          {(st!.on_device?.length ?? 0) > 0 && (
             <>
               <h2>On device</h2>
-              {st!.on_device.map((mi) => (
+              {(st!.on_device ?? []).map((mi) => (
                 <div className="queue-row" key={`o-${mi.book_id}`}>
                   <span className="state-chip done">synced</span>
                   <div style={{ flex: 1 }}>
@@ -246,7 +246,7 @@ export function DevicesPage() {
           {(st!.orphan?.length ?? 0) > 0 && (
             <>
               <h2>On device, not in library</h2>
-              {st!.orphan.map((f) => (
+              {(st!.orphan ?? []).map((f) => (
                 <div className="queue-row" key={f.Path} style={{ opacity: 0.8 }}>
                   <span className="state-chip queued">unmatched</span>
                   <div style={{ flex: 1 }}>

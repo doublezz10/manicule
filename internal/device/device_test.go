@@ -323,3 +323,51 @@ func TestUploadFallsBackToHTTP(t *testing.T) {
 		t.Fatalf("fallback upload landed %d bytes, want %d", got, len(body))
 	}
 }
+
+func TestPlanBooksCalibreFolders(t *testing.T) {
+	books := []LibBook{
+		{ID: 1, Title: "The Way of Kings", Author: "Brandon Sanderson", Format: "EPUB"},
+		{ID: 2, Title: "The Hero of Ages", Author: "Brandon Sanderson", Format: "EPUB"},
+	}
+	files := []DeviceFile{
+		{Path: "/Sanderson, Brandon/The Way of Kings.epub", Size: 10}, // Calibre "Last, First" folder
+		{Path: "/Ages, Hero of/The Hero of Ages.epub", Size: 11},      // mangled Calibre folder — title rescue
+	}
+	plan := PlanBooks(books, files)
+	if len(plan.OnDevice) != 2 || len(plan.Missing) != 0 || len(plan.Orphan) != 0 {
+		t.Fatalf("plan = on:%d miss:%d orphan:%d", len(plan.OnDevice), len(plan.Missing), len(plan.Orphan))
+	}
+	if plan.OnDevice[0].DevicePath != "/Sanderson, Brandon/The Way of Kings.epub" ||
+		plan.OnDevice[1].DevicePath != "/Ages, Hero of/The Hero of Ages.epub" {
+		t.Fatalf("matches: %+v", plan.OnDevice)
+	}
+}
+
+func TestPlanBooksAmbiguousTitleStaysOrphan(t *testing.T) {
+	books := []LibBook{
+		{ID: 1, Title: "Essays", Author: "Montaigne", Format: "EPUB"},
+	}
+	files := []DeviceFile{
+		{Path: "/Someone Else/Essays.epub", Size: 10},
+		{Path: "/Another/Essays.epub", Size: 11}, // two candidates — must not guess
+	}
+	plan := PlanBooks(books, files)
+	if len(plan.Missing) != 1 || len(plan.Orphan) != 2 {
+		t.Fatalf("ambiguous title should stay unmatched: %+v", plan)
+	}
+}
+
+func TestSplitDevicePathCalibreNames(t *testing.T) {
+	title, author := splitDevicePath("/Sanderson, Brandon/Way of Kings, The - Brandon Sanderson.epub")
+	if title != "Way of Kings, The" || author != "Brandon Sanderson" {
+		t.Fatalf("split = %q %q", title, author)
+	}
+	title, author = splitDevicePath("/K., Dick, Philip/Do Androids Dream of Electric Sheep_ - Dick, Philip K_.epub")
+	if title != "Do Androids Dream of Electric Sheep_" || author != "Philip K_ Dick" {
+		t.Fatalf("split = %q %q", title, author)
+	}
+	title, author = splitDevicePath("/Jules Verne/Journey.epub")
+	if title != "Journey" || author != "Jules Verne" {
+		t.Fatalf("split = %q %q", title, author)
+	}
+}

@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	uploadChunkSize = 32 * 1024
+	// 8KB frames: the reader is an ESP32 with ~57KB free heap — bigger
+	// frames overflow its socket buffer and it drops the connection
+	uploadChunkSize = 8 * 1024
 	uploadStall     = 30 * time.Second // watchdog: abort when the device goes quiet
 )
 
