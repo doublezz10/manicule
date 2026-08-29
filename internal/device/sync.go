@@ -7,6 +7,7 @@ package device
 import (
 	"context"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/doublezz10/manicule/internal/norm"
@@ -94,6 +95,26 @@ func WalkBooks(ctx context.Context, c *Client) ([]DeviceFile, error) {
 	return out, nil
 }
 
+// sortArticleRe matches Calibre's title-sort suffix ("Way of Kings, The").
+var sortArticleRe = regexp.MustCompile(`(?i)^(.+), (the|a|an)$`)
+
+// canonTitle rotates a trailing sort article to the front so the library's
+// "The Man In The High Castle" and the card's "Man In The High Castle, The"
+// compare equal.
+func canonTitle(t string) string {
+	if m := sortArticleRe.FindStringSubmatch(strings.TrimSpace(t)); m != nil {
+		base := strings.TrimSpace(m[1])
+		if base != "" {
+			return m[2] + " " + base
+		}
+	}
+	return t
+}
+
+// titleKey is the normalized comparison form of a title: sort-article
+// rotation first, then norm.Text.
+func titleKey(t string) string { return norm.Text(canonTitle(t)) }
+
 // splitDevicePath breaks "/Author/Title.ext" into its match parts. Calibre
 // save templates embed the author in the filename ("Title - Author.ext") and
 // write "Last, First" author folders — both get normalized, and the
@@ -134,7 +155,7 @@ func flipAuthor(a string) string {
 func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 	byTitle := map[string][]int{} // norm(title) → books indexes, for the flat pass
 	for i, b := range books {
-		byTitle[norm.Text(b.Title)] = append(byTitle[norm.Text(b.Title)], i)
+		byTitle[titleKey(b.Title)] = append(byTitle[titleKey(b.Title)], i)
 	}
 
 	fileOf := make([]int, len(books)) // books index → matched files index, -1 none
@@ -145,7 +166,7 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 
 	// pass 1: exact planned path or normalized author+title key
 	for i, b := range books {
-		wantKey := norm.Text(b.Title) + "|" + norm.Text(b.Author)
+		wantKey := titleKey(b.Title) + "|" + norm.Text(b.Author)
 		wantPath := RemotePathFor(b.Author, b.Title, b.Format)
 		for j, f := range files {
 			if usedFile[j] {
@@ -153,7 +174,7 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 			}
 			title, author := splitDevicePath(f.Path)
 			if f.Path == wantPath ||
-				(author != "" && wantKey == norm.Text(title)+"|"+norm.Text(flipAuthor(author))) {
+				(author != "" && wantKey == titleKey(title)+"|"+norm.Text(flipAuthor(author))) {
 				fileOf[i], usedFile[j] = j, true
 				break
 			}
@@ -169,7 +190,7 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 		if author != "" {
 			continue
 		}
-		for _, bi := range byTitle[norm.Text(title)] {
+		for _, bi := range byTitle[titleKey(title)] {
 			if fileOf[bi] == -1 {
 				fileOf[bi], usedFile[j] = j, true
 				break
@@ -184,7 +205,7 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 		if fileOf[i] != -1 {
 			continue
 		}
-		want := norm.Text(b.Title)
+		want := titleKey(b.Title)
 		if want == "" {
 			continue
 		}
@@ -193,7 +214,47 @@ func PlanBooks(books []LibBook, files []DeviceFile) Plan {
 			if usedFile[j] {
 				continue
 			}
-			if title, _ := splitDevicePath(f.Path); norm.Text(title) == want {
+			if title, _ := splitDevicePath(f.Path); titleKey(title) == want {
+				cand, hits = j, hits+1
+			}
+		}
+		if hits == 1 {
+			fileOf[i], usedFile[cand] = cand, true
+		}
+	}
+
+	// pass 4: truncation rescue. Calibre save templates cap filename length,
+	// so the library title can be a prefix of the card's full title ("Bug
+	// Music How Insects Gave Us Rhythm and" vs "…Rhythm and Noise"). Only
+	// fires on long titles with a matching author and exactly one candidate —
+	// short titles stay exact-match territory ("Dune" must never claim
+	// "Dune Messiah").
+	for i, b := range books {
+		if fileOf[i] != -1 {
+			continue
+		}
+		want, wantAuthor := titleKey(b.Title), norm.Text(b.Author)
+		if wantAuthor == "" {
+			continue
+		}
+		cand, hits := -1, 0
+		for j, f := range files {
+			if usedFile[j] {
+				continue
+			}
+			title, author := splitDevicePath(f.Path)
+			got := titleKey(title)
+			if got == want || norm.Text(author) != wantAuthor {
+				continue
+			}
+			shorter := got
+			if len(want) < len(got) {
+				shorter = want
+			}
+			if len(shorter) < 16 {
+				continue
+			}
+			if strings.HasPrefix(got, want) || strings.HasPrefix(want, got) {
 				cand, hits = j, hits+1
 			}
 		}

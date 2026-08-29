@@ -371,3 +371,67 @@ func TestSplitDevicePathCalibreNames(t *testing.T) {
 		t.Fatalf("split = %q %q", title, author)
 	}
 }
+
+func TestPlanBooksTruncationRescue(t *testing.T) {
+	// real card case: Calibre's ~40-char template truncated the library title
+	books := []LibBook{
+		{ID: 1, Title: "Bug Music How Insects Gave Us Rhythm and", Author: "David Rothenberg", Format: "EPUB"},
+		{ID: 2, Title: "Dune", Author: "Frank Herbert", Format: "EPUB"},
+	}
+	files := []DeviceFile{
+		{Path: "/Rothenberg, David/Bug Music_ How Insects Gave Us Rhythm and Noise - Rothenberg, David.epub", Size: 2670623},
+		{Path: "/Herbert, Frank/Dune Messiah - Frank Herbert.epub", Size: 5},
+	}
+	plan := PlanBooks(books, files)
+	byID := map[int64]Match{}
+	for _, m := range plan.OnDevice {
+		byID[m.BookID] = m
+	}
+	if m, ok := byID[1]; !ok || m.DeviceSize != 2670623 {
+		t.Fatalf("truncated title should match full card title: %+v missing=%+v", plan.OnDevice, plan.Missing)
+	}
+	// "Dune" must NOT claim "Dune Messiah" — short titles are exact-only
+	if _, ok := byID[2]; ok {
+		t.Fatalf("short title must not prefix-match: %+v", plan.OnDevice)
+	}
+	if len(plan.Missing) != 1 || plan.Missing[0].BookID != 2 {
+		t.Fatalf("Dune should stay missing: %+v", plan.Missing)
+	}
+	// Dune Messiah is on the card but not in the library — a true orphan
+	if len(plan.Orphan) != 1 || plan.Orphan[0].Path != "/Herbert, Frank/Dune Messiah - Frank Herbert.epub" {
+		t.Fatalf("Dune Messiah should remain an orphan: %+v", plan.Orphan)
+	}
+}
+
+func TestCanonTitle(t *testing.T) {
+	cases := map[string]string{
+		"Man In The High Castle, The": "The Man In The High Castle",
+		"Way of Kings, The":           "The Way of Kings",
+		"A Song of Ice and Fire":      "A Song of Ice and Fire",
+		"Power Worshippers, The":      "The Power Worshippers",
+		"":                            "",
+	}
+	for in, want := range cases {
+		if got := canonTitle(in); got != want {
+			t.Errorf("canonTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got, want := titleKey("Man In The High Castle, The"), titleKey("The Man In The High Castle"); got != want {
+		t.Fatalf("titleKey mismatch: %q vs %q", got, want)
+	}
+}
+
+func TestPlanBooksSortArticleRotation(t *testing.T) {
+	books := []LibBook{
+		{ID: 1, Title: "The Man In The High Castle", Author: "Philip K. Dick", Format: "EPUB"},
+		{ID: 2, Title: "A Song of Ice and Fire (Game of Thrones, f", Author: "George R.R. Martin", Format: "EPUB"},
+	}
+	files := []DeviceFile{
+		{Path: "/Dick, Philip K_/Man In The High Castle, The - Philip K. Dick.epub", Size: 9},
+		{Path: "/Martin, George R.R_/Song of Ice and Fire (Game of Thrones, full series), A - George R.R. Martin.epub", Size: 10},
+	}
+	plan := PlanBooks(books, files)
+	if len(plan.OnDevice) != 2 || len(plan.Missing) != 0 {
+		t.Fatalf("rotation matches failed: on=%d miss=%d orphan=%d", len(plan.OnDevice), len(plan.Missing), len(plan.Orphan))
+	}
+}
