@@ -28,6 +28,29 @@ tasks:
     cmds:
       - wails3 generate bindings -d frontend/bindings -clean -ts -names
 
+  package:
+    desc: Build the macOS app bundle (manicule.app with the brand icon)
+    cmds:
+      - wails3 generate bindings -d frontend/bindings -clean -ts -names
+      - cd frontend && npm install --no-audit --no-fund && npm run build
+      - go build -o build/bin/manicule .
+      - mkdir -p build/darwin && wails3 generate icons
+      - rm -rf build/bin/manicule.app
+      - mkdir -p build/bin/manicule.app/Contents/MacOS build/bin/manicule.app/Contents/Resources
+      - cp build/bin/manicule build/bin/manicule.app/Contents/MacOS/manicule
+      - cp build/darwin/icon.icns build/bin/manicule.app/Contents/Resources/manicule.icns
+      - cp build/darwin/Info.plist build/bin/manicule.app/Contents/Info.plist
+      - printf 'APPL????' > build/bin/manicule.app/Contents/PkgInfo
+      - codesign --force -s - build/bin/manicule.app
+    sources:
+      - app/**/*.go
+      - internal/**/*.go
+      - frontend/src/**/*
+      - main.go
+      - build/appicon.png
+    generates:
+      - build/bin/manicule.app/**
+
   snapshot:
     desc: Refresh the fleet's embedded registry snapshot from sources.json
     cmds:

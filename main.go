@@ -14,6 +14,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
@@ -38,7 +41,10 @@ func main() {
 
 	var window application.Window
 	if appInstance.Window != nil {
-	window = appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
+		// dock icon for bare-binary runs — a bundled .app carries it via
+		// Info.plist instead, this keeps dev launches on-brand
+		appInstance.SetIcon(appIcon)
+		window = appInstance.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "manicule ☞",
 		Width:     1280,
 		Height:    820,
