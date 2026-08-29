@@ -10,11 +10,23 @@ pulls from over WiFi.
 
 Built to replace the librarr + Calibre two-app shuffle with a single free, open-source desktop app.
 
-## Status
+## Download (v0.1 — macOS Apple Silicon)
 
-**In active development.** See [x3-companion-app-spec.md](./x3-companion-app-spec.md) for the full
-product & engineering spec and roadmap. Unsigned development builds; notarized installers land
-before public launch.
+Grab `manicule-0.1.0-macos-arm64.zip` from [Releases](https://github.com/doublezz10/manicule/releases),
+unzip, and drag **manicule.app** into `/Applications`.
+
+The app is unsigned (no paid Apple developer account yet), so macOS adds friction on first open:
+
+- Double-clicking may warn *"manicule cannot be opened"* — right-click → **Open**, or if your Mac
+  (Sequoia or newer) refuses that: **System Settings → Privacy & Security → Open Anyway**,
+  or in Terminal: `xattr -cr /Applications/manicule.app`
+- First launch asks twice: **Downloads access** (your library) and **Local Network**
+  (device sync + the OPDS server). Allow both.
+- Also worth allowing notifications? No — manicule never phones home. No accounts, no telemetry.
+
+Windows and Linux builds are community-supported and not packaged yet — build from source with
+`wails3 task package` (macOS) or `go build .` plus your platform's bundling. See
+[x3-companion-app-spec.md](./x3-companion-app-spec.md) for the full product & engineering spec.
 
 ## Highlights
 

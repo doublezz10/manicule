@@ -107,7 +107,7 @@ type UpdateInfo struct {
 	URL     string `json:"url"`
 }
 
-const currentVersion = "0.1.0-dev"
+const currentVersion = "0.1.0"
 
 func (m *Manicule) CheckForUpdates() (*UpdateInfo, error) {
 	info := &UpdateInfo{Current: currentVersion, URL: "https://github.com/doublezz10/manicule/releases"}
