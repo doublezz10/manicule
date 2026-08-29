@@ -64,35 +64,116 @@ func TestZLibraryNeedsAuth(t *testing.T) {
 
 func TestZLibrarySessionInvalidation(t *testing.T) {
 	z := NewZLibrary(nil).(*zlibrary)
-	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass"})
+	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass", "base_url": "https://m1.com"})
 	z.mu.Lock()
-	z.session = "old-session"
+	z.cookies = map[string]string{"remix_userkey": "old"}
 	z.mu.Unlock()
 
-	// Changing credentials should clear session
-	z.SetCredentials(Credentials{"email": "new@b.com", "password": "pass2"})
+	// Changing credentials must clear the stored session
+	z.SetCredentials(Credentials{"email": "new@b.com", "password": "pass2", "base_url": "https://m1.com"})
 	z.mu.Lock()
-	s := z.session
+	_, ok := z.cookies["remix_userkey"]
 	z.mu.Unlock()
-	if s != "" {
-		t.Fatalf("session not cleared after credential change: %q", s)
+	if ok {
+		t.Fatal("session not cleared after credential change")
 	}
 }
 
 func TestZLibraryBaseURLSessionInvalidation(t *testing.T) {
 	z := NewZLibrary(nil).(*zlibrary)
-	z.SetBaseURL("https://mirror1.com")
+	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass", "base_url": "https://mirror1.com"})
 	z.mu.Lock()
-	z.session = "session1"
+	z.cookies = map[string]string{"remix_userkey": "old"}
+	z.mirror = "https://mirror1.com"
 	z.mu.Unlock()
 
-	// Changing mirror should clear session
+	// Changing the mirror must clear the session and rotation state
 	z.SetBaseURL("https://mirror2.com")
 	z.mu.Lock()
-	s := z.session
+	_, ok := z.cookies["remix_userkey"]
+	m := z.mirror
 	z.mu.Unlock()
-	if s != "" {
-		t.Fatalf("session not cleared after mirror change: %q", s)
+	if ok || m != "" {
+		t.Fatalf("state not cleared after mirror change: cookie=%v mirror=%q", ok, m)
+	}
+}
+
+func TestZlJhash(t *testing.T) {
+	// reference values computed with real JavaScriptCore (get_jhash verbatim)
+	cases := map[int64]int64{430: 724, 534: 433, 562: 302, 601: 11}
+	for in, want := range cases {
+		if got := zlJhash(in); got != want {
+			t.Fatalf("zlJhash(%d) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+func TestZlFixedEncodeURIComponent(t *testing.T) {
+	ua := "manicule/0.1 (+https://github.com/doublezz10/manicule)"
+	want := "manicule%2F0.1%20%28%2Bhttps%3A%2F%2Fgithub.com%2Fdoublezz10%2Fmanicule%29"
+	if got := zlFixedEncodeURIComponent(ua); got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestZLibraryChallengeAndFlow(t *testing.T) {
+	var loginPosts int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/eapi/user/login", func(w http.ResponseWriter, r *http.Request) {
+		loginPosts++
+		if loginPosts == 1 {
+			// serve the anti-bot challenge exactly like the real edge
+			http.SetCookie(w, &http.Cookie{Name: "__js_p_", Value: "430,1800,0,0,0", Path: "/"})
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<html><script>function get_jhash(b){}</script></html>`))
+			return
+		}
+		// the retry must carry the solved challenge cookies
+		if !strings.Contains(r.Header.Get("Cookie"), "__jhash_=724") ||
+			!strings.Contains(r.Header.Get("Cookie"), "__jua_=") {
+			http.Error(w, "challenge cookies missing", http.StatusBadRequest)
+			return
+		}
+		w.Write([]byte(`{"success":1,"user":{"id":50109306,"remix_userkey":"key123","name":"tester"}}`))
+	})
+	mux.HandleFunc("/eapi/book/search", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Cookie"), "remix_userkey=key123") {
+			http.Error(w, "not logged in", http.StatusUnauthorized)
+			return
+		}
+		r.ParseForm()
+		if r.FormValue("message") != "dune" {
+			http.Error(w, "bad query", http.StatusBadRequest)
+			return
+		}
+		w.Write([]byte(`{"books":[{"id":11735659,"hash":"7659fb","title":"Dune","author":"Frank Herbert","year":2019,"extension":"epub","filesize":1936779,"cover":"/covers/dune.jpg","language":"en","description":"Spice."}]}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	z := NewZLibrary(nil).(*zlibrary)
+	z.base = srv.URL
+	z.SetCredentials(Credentials{"email": "a@b.com", "password": "pass", "base_url": srv.URL})
+
+	res, err := z.Search(context.Background(), "dune", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loginPosts < 2 {
+		t.Fatalf("challenge retry did not happen (%d login posts)", loginPosts)
+	}
+	if len(res) != 1 {
+		t.Fatalf("results: %+v", res)
+	}
+	r := res[0]
+	if r.Title != "Dune" || r.Year != "2019" || len(r.Formats) != 1 || r.Formats[0].Name != "EPUB" {
+		t.Fatalf("mapped result: %+v", r)
+	}
+	if r.Formats[0].Size != 1936779 || r.Formats[0].URL != "/eapi/book/11735659/7659fb/file" {
+		t.Fatalf("format: %+v", r.Formats[0])
+	}
+	if r.CoverURL != srv.URL+"/covers/dune.jpg" {
+		t.Fatalf("cover: %q", r.CoverURL)
 	}
 }
 

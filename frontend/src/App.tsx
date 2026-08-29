@@ -86,13 +86,23 @@ export default function App() {
     <ToastContext.Provider value={{ push }}>
       <div className="layout">
         <Sidebar page={page} setPage={setPage} queueCount={queueCount} serverLine={serverLine} />
-        <div className="main" key={page}>
-          <div className="page-enter">
-            {page === "search" && <SearchPage />}
-            {page === "queue" && <QueuePage />}
-            {page === "library" && <LibraryPage />}
-            {page === "devices" && <DevicesPage />}
-            {page === "settings" && <SettingsPage />}
+        <div className="main">
+          {/* all pages stay mounted (hidden with CSS) so in-progress work —
+              an ongoing search above all — survives pane switches */}
+          <div style={{ display: page === "search" ? undefined : "none" }}>
+            <SearchPage />
+          </div>
+          <div style={{ display: page === "queue" ? undefined : "none" }}>
+            <QueuePage />
+          </div>
+          <div style={{ display: page === "library" ? undefined : "none" }}>
+            <LibraryPage />
+          </div>
+          <div style={{ display: page === "devices" ? undefined : "none" }}>
+            <DevicesPage />
+          </div>
+          <div style={{ display: page === "settings" ? undefined : "none" }}>
+            <SettingsPage />
           </div>
         </div>
       </div>

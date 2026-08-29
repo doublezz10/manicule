@@ -271,7 +271,7 @@ function ZLibCredentials(props: {
   const [baseUrl, setBaseUrl] = useState(props.creds.base_url ?? "");
   const [dirty, setDirty] = useState(false);
 
-  const hasCreds = !!(email.trim() && password.trim() && baseUrl.trim());
+  const hasCreds = !!(email.trim() && password.trim()); // mirror is optional — the app rotates known-good defaults
 
   const handleSave = () => {
     if (!hasCreds) return;
@@ -289,7 +289,7 @@ function ZLibCredentials(props: {
         <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 0 }}>
           <input
             type="text"
-            placeholder="mirror URL (e.g. https://singlelogin.re)"
+            placeholder="mirror URL — optional (default: libb.la)"
             value={baseUrl}
             onChange={(e) => { setBaseUrl(e.target.value); setDirty(true); }}
           />
